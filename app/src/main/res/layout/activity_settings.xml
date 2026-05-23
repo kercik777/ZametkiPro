@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_primary">
+
+    <include layout="@layout/include_top_bar" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <!-- Внешний вид -->
+            <TextView style="@style/Text.GoldAccent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_appearance"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical"
+                android:background="@drawable/bg_settings_section">
+
+                <LinearLayout android:id="@+id/row_theme" style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_theme" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_theme" />
+                    <TextView android:id="@+id/value_theme" style="@style/SettingsValue" />
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+
+                <View style="@style/SettingsDiv" />
+
+                <LinearLayout android:id="@+id/row_view" style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_grid" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_view_mode" />
+                    <TextView android:id="@+id/value_view" style="@style/SettingsValue" />
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+
+                <View style="@style/SettingsDiv" />
+
+                <LinearLayout android:id="@+id/row_default_text_size" style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_notes" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_default_text_size" />
+                    <TextView android:id="@+id/value_default_text_size" style="@style/SettingsValue" />
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+                <View style="@style/SettingsDiv" />
+                <LinearLayout android:id="@+id/row_preview_lines" style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_notes" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_preview_lines" />
+                    <TextView android:id="@+id/value_preview_lines" style="@style/SettingsValue" />
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+                <View style="@style/SettingsDiv" />
+                <LinearLayout android:id="@+id/row_attachment_columns" style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_attach" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_attachment_columns" />
+                    <TextView android:id="@+id/value_attachment_columns" style="@style/SettingsValue" />
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Поведение -->
+            <TextView style="@style/Text.GoldAccent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_behavior"
+                android:textSize="12sp"
+                android:layout_marginTop="22dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical"
+                android:background="@drawable/bg_settings_section">
+
+                <LinearLayout style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_theme" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_haptic" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/sw_haptic"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+                <View style="@style/SettingsDiv" />
+                <LinearLayout style="@style/SettingsRow">
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_confirm_delete" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/sw_confirm"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+                <View style="@style/SettingsDiv" />
+                <LinearLayout style="@style/SettingsRow">
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_confirm_save_exit" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/sw_confirm_save_exit"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+                <View style="@style/SettingsDiv" />
+                <LinearLayout style="@style/SettingsRow">
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_show_date" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/sw_date"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+                <View style="@style/SettingsDiv" />
+                <LinearLayout style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_eye" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_read_mode" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/sw_read_mode"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+                <View style="@style/SettingsDiv" />
+                <LinearLayout
+                    android:id="@+id/row_trash_auto_delete"
+                    style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_delete" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_trash_auto_delete" />
+                    <TextView
+                        android:id="@+id/value_trash_auto_delete"
+                        style="@style/SettingsValue" />
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+                <View style="@style/SettingsDiv" />
+                <LinearLayout
+                    android:id="@+id/row_swipe_action"
+                    style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_archive" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_swipe_action" />
+                    <TextView
+                        android:id="@+id/value_swipe_action"
+                        style="@style/SettingsValue" />
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+                <View style="@style/SettingsDiv" />
+                <LinearLayout
+                    android:id="@+id/row_menu_items"
+                    style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_category" />
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_menu_items"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp" />
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="@string/settings_menu_items_subtitle"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Безопасность -->
+            <TextView style="@style/Text.GoldAccent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_security"
+                android:textSize="12sp"
+                android:layout_marginTop="22dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical"
+                android:background="@drawable/bg_settings_section">
+
+                <LinearLayout android:id="@+id/row_password" style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_lock" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_master_password" />
+                    <TextView android:id="@+id/value_password" style="@style/SettingsValue" />
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+                <View style="@style/SettingsDiv" />
+                <LinearLayout style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_lock_open" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_use_biometric" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/sw_biometric"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+                <View style="@style/SettingsDiv" />
+                <LinearLayout style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_calculator" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_disguise_label" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/sw_disguise"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Данные -->
+            <TextView style="@style/Text.GoldAccent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_data"
+                android:textSize="12sp"
+                android:layout_marginTop="22dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical"
+                android:background="@drawable/bg_settings_section">
+
+                <LinearLayout android:id="@+id/row_clear" style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_delete" app:tint="@color/error" />
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="@string/settings_clear_all"
+                            android:textColor="@color/error" android:textSize="15sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="@string/settings_clear_summary"
+                            android:textColor="@color/text_tertiary" android:textSize="11sp"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Информация -->
+            <TextView style="@style/Text.GoldAccent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_about"
+                android:textSize="12sp"
+                android:layout_marginTop="22dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical"
+                android:background="@drawable/bg_settings_section">
+
+                <LinearLayout style="@style/SettingsRow">
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_version" />
+                    <TextView android:id="@+id/value_version"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/gold_primary" android:textSize="13sp" android:textStyle="bold" />
+                </LinearLayout>
+                <View style="@style/SettingsDiv" />
+                <LinearLayout android:id="@+id/row_about" style="@style/SettingsRow">
+                    <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_info" />
+                    <TextView style="@style/SettingsTitle" android:text="@string/settings_about_app" />
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <View android:layout_width="match_parent" android:layout_height="40dp" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

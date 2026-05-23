@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="10dp"
+    android:paddingBottom="14dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/bg_sheet_handle" />
+
+    <TextView
+        style="@style/SheetSubtitle"
+        android:text="@string/settings_menu_items" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
+
+        <CheckBox
+            android:id="@+id/cb_pinned"
+            style="@style/SettingsCheckRow"
+            android:text="@string/menu_item_pinned" />
+
+        <CheckBox
+            android:id="@+id/cb_favorite"
+            style="@style/SettingsCheckRow"
+            android:text="@string/menu_item_favorite" />
+
+        <CheckBox
+            android:id="@+id/cb_checklist"
+            style="@style/SettingsCheckRow"
+            android:text="@string/menu_item_checklist" />
+
+        <CheckBox
+            android:id="@+id/cb_reminder"
+            style="@style/SettingsCheckRow"
+            android:text="@string/menu_item_reminder" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:layout_marginTop="6dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        tools:ignore="UseCompoundDrawables">
+
+        <TextView
+            android:id="@+id/btn_cancel"
+            style="@style/SheetActionRow"
+            android:layout_width="wrap_content"
+            android:textColor="@color/text_secondary"
+            android:textStyle="bold"
+            android:text="@string/cancel_uppercase" />
+
+        <TextView
+            android:id="@+id/btn_done"
+            style="@style/SheetActionRow"
+            android:layout_width="wrap_content"
+            android:textColor="@color/gold_primary"
+            android:textStyle="bold"
+            android:text="@string/done_uppercase" />
+    </LinearLayout>
+</LinearLayout>

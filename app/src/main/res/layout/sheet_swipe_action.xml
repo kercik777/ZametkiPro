@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="10dp"
+    android:paddingBottom="14dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/bg_sheet_handle" />
+
+    <TextView
+        style="@style/SheetSubtitle"
+        android:text="@string/settings_swipe_action" />
+
+    <RadioGroup
+        android:id="@+id/rg_swipe_action"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
+
+        <RadioButton
+            android:id="@+id/rb_trash_archive"
+            style="@style/SettingsRadioRow"
+            android:text="@string/swipe_mode_trash_archive" />
+
+        <RadioButton
+            android:id="@+id/rb_archive_trash"
+            style="@style/SettingsRadioRow"
+            android:text="@string/swipe_mode_archive_trash" />
+
+        <RadioButton
+            android:id="@+id/rb_archive_only"
+            style="@style/SettingsRadioRow"
+            android:text="@string/swipe_mode_archive_only" />
+
+        <RadioButton
+            android:id="@+id/rb_trash_only"
+            style="@style/SettingsRadioRow"
+            android:text="@string/swipe_mode_trash_only" />
+
+        <RadioButton
+            android:id="@+id/rb_off"
+            style="@style/SettingsRadioRow"
+            android:text="@string/swipe_mode_off" />
+    </RadioGroup>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:layout_marginTop="6dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        tools:ignore="UseCompoundDrawables">
+
+        <TextView
+            android:id="@+id/btn_cancel"
+            style="@style/SheetActionRow"
+            android:layout_width="wrap_content"
+            android:textColor="@color/gold_primary"
+            android:textStyle="bold"
+            android:text="@string/cancel_uppercase" />
+    </LinearLayout>
+</LinearLayout>
