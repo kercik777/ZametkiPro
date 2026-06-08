@@ -1,0 +1,509 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">zametka big pickle</string>
+
+    <!-- Onboarding -->
+    <string name="onb1_title">Добро пожаловать</string>
+    <string name="onb1_desc">ЗаметкиPro — элегантный способ хранить ваши идеи, задачи и воспоминания. Всё в одном месте.</string>
+    <string name="onb2_title">Категории и теги</string>
+    <string name="onb2_desc">Организуйте заметки по категориям, добавляйте цветные метки и быстро находите нужное.</string>
+    <string name="onb3_title">Чек-листы и закрепление</string>
+    <string name="onb3_desc">Создавайте списки дел, закрепляйте важные заметки сверху, архивируйте старые.</string>
+    <string name="onb4_title">Безопасно и приватно</string>
+    <string name="onb4_desc">Все данные хранятся только на вашем устройстве. Никаких серверов, никакой передачи данных.</string>
+    <string name="next">Далее</string>
+    <string name="skip">Пропустить</string>
+    <string name="start">Начать</string>
+
+    <!-- Главный экран -->
+    <string name="search_hint">Поиск по заметкам…</string>
+    <string name="empty_notes_title">Пока пусто</string>
+    <string name="empty_notes_desc">Нажмите кнопку «+», чтобы создать первую заметку</string>
+    <string name="empty_archive_title">Архив пуст</string>
+    <string name="empty_archive_desc">Архивированные заметки появятся здесь</string>
+    <string name="empty_trash_title">Корзина пуста</string>
+    <string name="empty_trash_desc">Удалённые заметки хранятся здесь 30 дней</string>
+    <string name="empty_trash_desc_days">Удалённые заметки хранятся здесь %1$s</string>
+    <string name="empty_trash_desc_manual">Удалённые заметки будут храниться здесь, пока вы не удалите их вручную</string>
+    <string name="empty_search_title">Ничего не найдено</string>
+    <string name="empty_search_desc">Попробуйте изменить запрос</string>
+    <string name="empty_pinned_title">Нет закреплённых заметок</string>
+    <string name="empty_pinned_desc">Закрепите важные заметки, чтобы они всегда были сверху</string>
+    <string name="empty_favorites_title">Нет избранных заметок</string>
+    <string name="empty_favorites_desc">Добавляйте заметки в избранное для быстрого доступа</string>
+    <string name="empty_checklists_title">Нет чек-листов</string>
+    <string name="empty_checklists_desc">Создайте список задач или покупок, чтобы увидеть его здесь</string>
+    <string name="empty_reminders_title">Нет активных напоминаний</string>
+    <string name="empty_reminders_desc">Установите напоминание для заметки, и оно появится здесь</string>
+    <string name="empty_category_notes_title">В этой категории пока пусто</string>
+    <string name="empty_category_notes_desc">Создайте заметку или перенесите сюда существующую</string>
+    <string name="sort_manual_hint">Ручная сортировка включена. Удерживайте заметку, чтобы перетащить её.</string>
+
+    <!-- Фильтры -->
+    <string name="filter_all">Все</string>
+    <string name="filter_pinned">Закреплённые</string>
+    <string name="filter_checklists">Чек-листы</string>
+    <string name="filter_favorites">Избранные</string>
+
+    <!-- Сортировка -->
+    <string name="sort_title">Сортировка</string>
+    <string name="sort_date_desc">Сначала новые</string>
+    <string name="sort_date_asc">Сначала старые</string>
+    <string name="sort_title_asc">По названию (А–Я)</string>
+    <string name="sort_title_desc">По названию (Я–А)</string>
+    <string name="sort_color">По цвету</string>
+    <string name="sort_manual">Вручную (drag &amp; drop)</string>
+
+    <!-- Меню навигации -->
+    <string name="nav_categories">Категории</string>
+    <string name="nav_archive">Архив</string>
+    <string name="nav_trash">Корзина</string>
+    <string name="nav_statistics">Статистика</string>
+    <string name="nav_settings">Настройки</string>
+    <string name="nav_backup">Рез. копирование</string>
+    <string name="nav_about">О приложении</string>
+
+    <!-- Создание / редактирование -->
+    <string name="title_hint">Заголовок</string>
+    <string name="content_hint">Начните писать…</string>
+    <string name="checklist_item_hint">Пункт списка</string>
+    <string name="add_item">Добавить пункт</string>
+    <string name="save">Сохранить</string>
+    <string name="cancel">Отмена</string>
+    <string name="restore">Восстановить</string>
+    <string name="reset">Сбросить</string>
+    <string name="delete">Удалить</string>
+    <string name="edit">Редактировать</string>
+    <string name="archive">Архивировать</string>
+    <string name="unarchive">Разархивировать</string>
+    <string name="delete_forever">Удалить навсегда</string>
+    <string name="duplicate">Дублировать</string>
+    <string name="copy_note">Скопировать</string>
+    <string name="share">Поделиться</string>
+    <string name="select_color">Выбрать цвет</string>
+    <string name="select_category">Категория</string>
+    <string name="no_category">Без категории</string>
+    <string name="convert_to_checklist">В чек-лист</string>
+    <string name="convert_to_text">В обычную заметку</string>
+
+    <!-- Категории -->
+    <string name="categories_title">Категории</string>
+    <string name="add_category">Новая категория</string>
+    <string name="category_name_hint">Название категории</string>
+
+    <!-- Диалоги подтверждения -->
+    <string name="confirm_delete_title">Удалить заметку?</string>
+    <string name="confirm_delete_msg">Заметка будет перемещена в корзину</string>
+    <string name="confirm_delete_category_title">Удалить категорию?</string>
+    <string name="confirm_delete_category_msg">Заметки этой категории станут «Без категории»</string>
+
+    <!-- Уведомления (Snackbar / Toast) -->
+    <string name="msg_saved">Заметка сохранена</string>
+    <string name="msg_pinned">Закреплено</string>
+    <string name="msg_unpinned">Откреплено</string>
+    <string name="msg_duplicated">Заметка продублирована</string>
+    <string name="note_copied">Заметка скопирована</string>
+    <string name="msg_empty_note">Пустую заметку невозможно сохранить</string>
+    <string name="msg_undo">Отменить</string>
+    <string name="msg_category_added">Категория добавлена</string>
+    <string name="msg_category_deleted">Категория удалена</string>
+
+    <!-- Настройки -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_appearance">Внешний вид</string>
+    <string name="settings_theme">Тема оформления</string>
+    <string name="settings_view_mode">Вид списка</string>
+    <string name="settings_view_grid">Сетка</string>
+    <string name="settings_view_list">Список</string>
+    <string name="settings_font_size">Размер шрифта</string>
+    <string name="settings_font_small">Маленький</string>
+    <string name="settings_font_normal">Обычный</string>
+    <string name="settings_font_large">Большой</string>
+    <string name="settings_behavior">Поведение</string>
+    <string name="settings_haptic">Виброотклик</string>
+    <string name="settings_read_mode">Режим чтения в редакторе</string>
+    <string name="settings_read_mode_enabled_msg">Теперь заметки будут открываться в режиме чтения</string>
+    <string name="settings_read_mode_disabled_msg">Теперь заметки будут сразу открываться в режиме редактирования</string>
+    <string name="settings_confirm_delete">Подтверждать удаление</string>
+    <string name="settings_show_date">Показывать дату</string>
+    <string name="settings_active_links">Активные ссылки</string>
+    <string name="settings_active_links_desc">Делать ссылки в тексте активными</string>
+    <string name="settings_data">Данные</string>
+    <string name="settings_clear_all">Очистить все данные</string>
+    <string name="settings_clear_summary">Удаление всех заметок и категорий</string>
+    <string name="settings_about">Информация</string>
+    <string name="settings_version">Версия приложения</string>
+    <string name="settings_about_app">О приложении</string>
+
+    <string name="backup_title">Резервное копирование</string>
+    <string name="backup_subtitle">Сохраняйте заметки, категории и вложения в ZIP-файл и восстанавливайте их в пару нажатий.</string>
+    <string name="backup_export_title">Экспорт в ZIP-файл</string>
+    <string name="backup_export_desc">Создать резервную копию базы и всех вложений</string>
+    <string name="backup_import_title">Импорт из ZIP-файла</string>
+    <string name="backup_import_desc">Восстановить данные из резервной копии</string>
+    <string name="backup_warning_title">Важно</string>
+    <string name="backup_warning_desc">Перед импортом убедитесь, что у вас сохранена актуальная копия. Импорт полностью заменяет текущие заметки, категории и файлы.</string>
+
+    <string name="theme_dark">Тёмная (Premium)</string>
+    <string name="theme_light">Светлая</string>
+    <string name="theme_system">Как в системе</string>
+
+    <!-- Статистика -->
+    <string name="stats_title">Статистика</string>
+    <string name="stats_total_notes">Всего заметок</string>
+    <string name="stats_pinned">Закреплено</string>
+    <string name="stats_favorites">Избранных</string>
+    <string name="stats_archived">В архиве</string>
+    <string name="stats_in_trash">В корзине</string>
+    <string name="stats_categories">Категорий</string>
+    <string name="stats_words_total">Всего слов</string>
+    <string name="stats_chars_total">Всего символов</string>
+    <string name="stats_checklists">Чек-листов</string>
+    <string name="stats_tasks_done">Задач выполнено</string>
+    <string name="stats_overview">Обзор</string>
+    <string name="stats_content">Контент</string>
+    <string name="stats_distribution">Распределение по категориям</string>
+
+    <!-- О приложении -->
+    <string name="about_title">О приложении</string>
+    <string name="about_version_label">Версия %1$s</string>
+    <string name="about_description">ЗаметкиPro — премиальное приложение для заметок, созданное с заботой о деталях. Элегантный чёрно-золотой дизайн, продуманный функционал и полная конфиденциальность ваших данных.</string>
+    <string name="about_features_title">Возможности</string>
+    <string name="about_feature_1">• Создание текстовых заметок и чек-листов</string>
+    <string name="about_feature_2">• Категории и цветовые метки</string>
+    <string name="about_feature_3">• Закрепление и избранное</string>
+    <string name="about_feature_4">• Поиск, сортировка и фильтры</string>
+    <string name="about_feature_5">• Архив и корзина с восстановлением</string>
+    <string name="about_feature_6">• Подробная статистика</string>
+    <string name="about_feature_7">• Экспорт заметок</string>
+    <string name="about_feature_8">• Премиум чёрно-золотой дизайн</string>
+    <string name="about_feature_9">• 100% локальное хранение данных</string>
+    <string name="note_info_title">Информация о заметке</string>
+    <string name="note_info_created">Создано: %1$s</string>
+    <string name="note_info_updated">Обновлено: %1$s</string>
+    <string name="note_info_words">Слов: %1$d</string>
+    <string name="note_info_chars">Символов: %1$d</string>
+    <string name="note_info_attachments">Вложений: %1$d</string>
+    <string name="note_info_attachment_images">Фото: %1$d</string>
+    <string name="note_info_attachment_videos">Видео: %1$d</string>
+    <string name="note_info_attachment_audio">Аудио: %1$d</string>
+    <string name="note_info_attachment_files">Файлы: %1$d</string>
+    <string name="note_info_attachment_size">Общий размер: %1$s</string>
+    <string name="note_info_checklist">Пунктов чек-листа: %1$d</string>
+    <string name="note_info_done">Выполнено: %1$d</string>
+    <string name="about_made_with">Сделано с ♥ для тех, кто ценит качество</string>
+
+    <!-- Прочее -->
+    <string name="ok">ОК</string>
+    <string name="done">Готово</string>
+    <string name="no">Нет</string>
+    <string name="empty_trash">Очистить корзину</string>
+    <string name="items_selected">%d</string>
+
+    <!-- Время -->
+    <string name="time_just_now">Только что</string>
+    <string name="time_minutes_ago">%d мин. назад</string>
+    <string name="time_hours_ago">%d ч. назад</string>
+    <string name="time_yesterday">Вчера</string>
+    <string name="time_days_ago">%d дн. назад</string>
+
+    <!-- Доступность (TalkBack) -->
+    <string name="cd_back">Назад</string>
+
+    <!-- Защита -->
+    <string name="locked_note_placeholder">[Защищённая заметка]</string>
+    <string name="locked_note_title">[x] %s</string>
+
+    <!-- Splash -->
+    <string name="splash_subtitle">Премиум заметки</string>
+    <string name="search_results_count">Найдено: %1$d</string>
+    <string name="search_idle_hint">Введите запрос, чтобы найти заметки</string>
+    <string name="search_loading">Ищем заметки…</string>
+    <string name="empty_category_named_title">В категории «%1$s» пока пусто</string>
+    <string name="stats_no_data">Пока нет данных для статистики</string>
+
+    <string name="drawer_subtitle">Премиум заметки</string>
+    <string name="nav_reminders">Напоминания</string>
+    <string name="manage_categories">Управление категориями</string>
+    <string name="empty_categories_title">Нет категорий</string>
+    <string name="empty_categories_desc">Нажмите «+» чтобы добавить</string>
+    <string name="lock_password_hint">Пароль</string>
+    <string name="lock_unlock_action">Разблокировать</string>
+    <string name="calculator_title">Калькулятор</string>
+    <string name="calculator_swipe_hint">Для длинных выражений можно свайпать влево и вправо</string>
+    <string name="read_mode_enabled_title">Режим чтения включён</string>
+    <string name="read_mode_switch_to_edit">Режим редактора</string>
+    <string name="sheet_attach_title">Прикрепить</string>
+    <string name="sheet_attach_image">Изображение из галереи</string>
+    <string name="sheet_attach_video_gallery">Видео из галереи</string>
+    <string name="sheet_attach_camera">Сделать фото</string>
+    <string name="sheet_attach_video_camera">Снять видео на камеру</string>
+    <string name="sheet_attach_audio">Записать аудио</string>
+    <string name="sheet_attach_file">Прикрепить файл</string>
+    <string name="category_edit_color">Цвет</string>
+    <string name="category_edit_hide_title">Скрыть из «Все заметки»</string>
+    <string name="category_edit_hide_desc">Заметки этой категории не будут показываться в общем списке</string>
+    <string name="category_edit_lock_title">Защитить паролем</string>
+    <string name="category_edit_lock_desc">Требуется пароль/отпечаток для просмотра</string>
+    <string name="sheet_info_title_note">Информация о заметке</string>
+    <string name="link_type_email">Почта</string>
+    <string name="link_type_phone">Номер телефона</string>
+    <string name="link_type_web">Ссылка</string>
+    <string name="open">Открыть</string>
+    <string name="link_open_failed">Не удалось открыть ссылку</string>
+    <string name="sheet_read_aloud">Прочитать вслух</string>
+    <string name="sheet_add_favorite">Добавить в избранное</string>
+    <string name="sheet_remove_favorite">Убрать из избранного</string>
+    <string name="sheet_text_size_title">Размер текста</string>
+    <string name="password_sheet_title">Пароль</string>
+    <string name="password_sheet_subtitle">Используется для защиты заметок и категорий</string>
+    <string name="password_sheet_old_hint">Текущий пароль</string>
+    <string name="password_sheet_new_hint">Новый пароль</string>
+    <string name="password_sheet_confirm_hint">Повторите пароль</string>
+    <string name="replace_title">Заменить</string>
+    <string name="replace_all">Заменить все</string>
+    <string name="replace_find_hint">Найти</string>
+    <string name="replace_replace_hint">Заменить на</string>
+    <string name="text_size_title">Размер текста заметки</string>
+    <string name="trash_auto_delete_off">Выключено</string>
+    <string name="trash_auto_delete_7">Через 7 дней</string>
+    <string name="trash_auto_delete_10">Через 10 дней</string>
+    <string name="trash_auto_delete_15">Через 15 дней</string>
+    <string name="trash_auto_delete_30">Через 30 дней</string>
+    <string name="lock_password_not_set_title">Пароль не задан</string>
+    <string name="lock_password_not_set_msg">Установите пароль в настройках, чтобы использовать защиту</string>
+    <string name="go_to_settings">В настройки</string>
+    <string name="calculator_memory_cleared">Память очищена</string>
+    <string name="calculator_memory_empty">Память пуста</string>
+    <string name="calculator_memory_added">Добавлено в память</string>
+    <string name="calculator_memory_subtracted">Вычтено из памяти</string>
+    <string name="calculator_no_valid_result">Нет корректного результата</string>
+    <string name="calculator_finish_expression_first">Сначала завершите выражение</string>
+    <string name="audio_player_title_text">Аудио плеер</string>
+    <string name="error_prefix">Ошибка: %1$s</string>
+    <string name="file_not_found">Файл не найден</string>
+    <string name="file_saved">Файл сохранён</string>
+    <string name="permission_denied">Разрешение не выдано</string>
+    <string name="camera_unavailable">Камера недоступна: %1$s</string>
+    <string name="search_text_prompt">Введите текст для поиска</string>
+    <string name="search_no_matches">Совпадения не найдены</string>
+    <string name="search_found_count">Найдено: %1$d</string>
+    <string name="copied_to_file_failed">Не удалось открыть выбор файла</string>
+    <string name="share_failed">Не удалось поделиться</string>
+    <string name="gallery_open_failed">Не удалось открыть галерею</string>
+    <string name="gallery_open_failed_with_reason">Не удалось открыть галерею: %1$s</string>
+    <string name="file_picker_failed">Не удалось открыть выбор файлов</string>
+    <string name="note_save_failed">Не удалось сохранить заметку</string>
+    <string name="time_already_passed">Время уже прошло</string>
+    <string name="reminder_set">Напоминание установлено</string>
+    <string name="tts_unavailable">TTS недоступен</string>
+    <string name="no_text_to_read">Нет текста для озвучивания</string>
+    <string name="open_gallery_video_failed">Не удалось открыть галерею</string>
+    <string name="no_app_to_open">Нет приложения для открытия</string>
+    <string name="backup_export_done">Экспорт завершён</string>
+    <string name="backup_import_success_title">Успешно!</string>
+    <string name="backup_import_success_msg">Данные успешно восстановлены.
+
+Приложение сейчас откроется заново для применения изменений.</string>
+    <string name="backup_import_confirm_title">Импорт резервной копии</string>
+    <string name="backup_import_confirm_msg">При импорте все существующие заметки, категории и вложения будут заменены данными из ZIP-файла. Продолжить?</string>
+    <string name="backup_progress_export">Создание резервной копии…</string>
+    <string name="backup_progress_import">Восстановление из резервной копии…</string>
+    <string name="about_share_text">ZametkiPro
+Версия: %1$s
+Пакет: %2$s</string>
+    <string name="share_menu_failed">Не удалось открыть меню поделиться</string>
+    <string name="main_all_notes">Все заметки</string>
+    <string name="main_archive">Архив</string>
+    <string name="main_trash">Корзина</string>
+    <string name="main_reminders">Напоминания</string>
+    <string name="main_no_categories_hint">Нет категорий
+Нажмите + чтобы добавить</string>
+    <string name="main_category_protected">Категория защищена</string>
+    <string name="main_note_protected">Заметка защищена</string>
+    <string name="main_enter_password">Введите пароль</string>
+    <string name="main_restored_from_trash">Заметка восстановлена</string>
+    <string name="main_deleted_forever">Удалено навсегда</string>
+    <string name="main_restored_from_archive">Восстановлено из архива</string>
+    <string name="main_moved_to_trash">Перемещено в корзину</string>
+    <string name="main_note_archived">Заметка архивирована</string>
+    <string name="main_note_in_trash">Заметка в корзине</string>
+    <string name="main_selection_pinned">Закреплено: %1$d</string>
+    <string name="main_selection_unpinned">Снято с закрепления: %1$d</string>
+    <string name="main_selection_deleted">Удалено: %1$d</string>
+    <string name="main_selection_locked_notes_msg">Заблокированные заметки нельзя изменять, пока не снимете защиту</string>
+    <string name="main_category_cleared">Категория очищена</string>
+    <string name="main_category_updated">Категория обновлена</string>
+    <string name="main_color_applied">Цвет применён: %1$d</string>
+    <string name="settings_biometric_unavailable">Биометрия недоступна на этом устройстве</string>
+    <string name="settings_set_master_password_first">Сначала установите мастер-пароль</string>
+    <string name="settings_disguise_label">Маскировка (Калькулятор)</string>
+<string name="settings_enable_disguise_title">Включить маскировку?</string>
+    <string name="settings_enable_disguise_msg">Приложение станет «Калькулятором» с новой иконкой. Для входа в заметки введите пароль на калькуляторе и нажмите =.</string>
+    <string name="settings_enable">Включить</string>
+    <string name="settings_disguise_save_failed">Не удалось сохранить состояние маскировки</string>
+    <string name="settings_disguise_disable_failed">Не удалось отключить маскировку</string>
+    <string name="settings_disguise_enabled_toast">Маскировка включена. Проверьте иконку на рабочем столе.</string>
+    <string name="settings_disguise_disabled_toast">Маскировка отключена. Проверьте обычную иконку приложения.</string>
+    <string name="settings_delete_all_title">Удалить все данные?</string>
+    <string name="settings_delete_all_msg">Все заметки, категории, вложения и настройки будут безвозвратно удалены</string>
+    <string name="settings_password_installed">Установлен</string>
+    <string name="settings_password_not_set">Не задан</string>
+    <string name="settings_password_change_title">Изменить пароль</string>
+    <string name="settings_password_set_title">Установить пароль</string>
+    <string name="settings_password_change_subtitle">Введите текущий пароль и задайте новый</string>
+    <string name="settings_password_set_subtitle">Придумайте мастер-пароль для защиты данных</string>
+    <string name="settings_error_wrong_password">Неверный пароль</string>
+    <string name="settings_error_min_password">Минимум 4 символа</string>
+    <string name="settings_error_passwords_not_match">Пароли не совпадают</string>
+    <string name="settings_password_saved">Пароль сохранён</string>
+    <string name="settings_password_removed">Пароль удалён. Маскировка и блокировки отключены</string>
+    <string name="settings_trash_auto_delete">Автоудаление корзины</string>
+    <string name="stats_no_category">Без категории</string>
+    <string name="categories_password_required_title">Установите пароль</string>
+    <string name="categories_password_required_msg">Для блокировки категорий нужен пароль. Перейти в настройки?</string>
+    <string name="categories_go">Перейти</string>
+    <string name="categories_name_required">Введите название</string>
+    <string name="categories_duplicate_name">Категория с таким названием уже существует</string>
+    <string name="reminder_title">Напоминание</string>
+    <string name="biometric_use_password">Использовать пароль</string>
+
+    <string name="settings_security">Безопасность</string>
+    <string name="settings_use_biometric">Использовать биометрию</string>
+    <string name="settings_master_password">Мастер-пароль</string>
+    <string name="settings_confirm_save_exit">Подтверждать сохранение при выходе</string>
+    <string name="attachment_action_open">Открыть</string>
+    <string name="attachment_action_save_files">Сохранить в файлы</string>
+    <string name="record_audio_title">Запись голосового сообщения</string>
+    <string name="lock_subtitle_default">Для разблокировки</string>
+    <string name="biometric_prompt_title">Разблокировка</string>
+    <string name="biometric_prompt_subtitle">Подтвердите личность</string>
+    <string name="error_label">Ошибка</string>
+    <string name="main_archive_title">Архив</string>
+    <string name="main_trash_title">Корзина</string>
+    <string name="main_reminders_title">Напоминания</string>
+    <string name="main_delete_notes_forever">Удалить %1$d заметок навсегда?</string>
+    <string name="main_delete_notes">Удалить %1$d заметок?</string>
+    <string name="main_archived_count">Перемещено в архив: %1$d</string>
+    <string name="main_unarchived_count">Восстановлено из архива: %1$d</string>
+    <string name="main_restored_trash_count">Восстановлено из корзины: %1$d</string>
+    <string name="main_removed_count">%1$d удалено</string>
+    <string name="main_delete_note_forever_title">Удалить заметку навсегда?</string>
+    <string name="main_delete_note_forever_msg">Это действие нельзя отменить. Все вложенные файлы тоже будут удалены.</string>
+    <string name="edit_note_go_to_settings">В настройки</string>
+    <string name="edit_note_enter_password_to_view">Введите пароль для просмотра</string>
+    <string name="edit_note_read_mode_on">Включить режим чтения</string>
+    <string name="edit_note_attachment_deleted">Вложение удалено</string>
+    <string name="edit_note_choose_action_before_exit">Выберите действие перед выходом из редактора</string>
+    <string name="edit_note_exit">Выйти</string>
+    <string name="edit_note_done_prefix">Выполнено: %1$s</string>
+    <string name="edit_note_master_password_required">Для защиты заметок необходимо установить мастер-пароль в настройках</string>
+    <string name="edit_note_added_to_favorites">Добавлено в избранное</string>
+    <string name="edit_note_removed_from_favorites">Убрано из избранного</string>
+    <string name="edit_note_replace_done">Заменено: %1$d</string>
+    <string name="edit_note_note_protected">Заметка защищена</string>
+    <string name="edit_note_protection_removed">Защита снята</string>
+    <string name="edit_note_locked_note_title">Защищённая заметка</string>
+    <string name="edit_note_copying_files_title">Копирование файлов</string>
+    <string name="edit_note_not_saving">Не сохранять</string>
+    <string name="edit_note_prepare_copy">Подготовка к копированию…</string>
+    <string name="edit_note_wait">Подождать</string>
+    <string name="edit_note_text_mode_search_only">Поиск доступен для текстовой заметки</string>
+    <string name="edit_note_read_aloud">Прочитать вслух</string>
+    <string name="edit_note_point_prefix">Пункт: %1$s</string>
+    <string name="edit_note_text_size_format">Размер текста: %1$d</string>
+    <string name="edit_note_read_mode_enabled">Режим чтения включён</string>
+    <string name="edit_note_read_mode_disabled">Режим редактирования включён</string>
+    <string name="edit_note_switch_edit_first">Сначала переключитесь в режим редактирования</string>
+    <string name="edit_note_remove_reminder">Удалить напоминание</string>
+    <string name="edit_note_remove_attachment">Удалить вложение?</string>
+    <string name="edit_note_files_copying_msg">Файлы ещё копируются. Если выйти сейчас, незавершённые файлы будут удалены автоматически.</string>
+    <string name="edit_note_open_with">Открыть с помощью</string>
+    <string name="edit_note_share_chooser">Поделиться</string>
+    <string name="edit_note_error_with_reason">Ошибка: %1$s</string>
+    <string name="edit_note_stop_reading">Остановить чтение</string>
+    <string name="edit_note_reading_stopped">Чтение остановлено</string>
+    <string name="edit_note_preparing_read">Подготовка чтения…</string>
+    <string name="main_selection_move_to_trash_count">Перемещено в корзину: %1$d</string>
+    <string name="main_filter_pinned">Закреплённые</string>
+    <string name="main_filter_favorites">Избранные</string>
+    <string name="main_filter_checklists">Чек-листов</string>
+    <string name="categories_note_one">%1$d заметка</string>
+    <string name="categories_note_few">%1$d заметки</string>
+    <string name="categories_note_many">%1$d заметок</string>
+    <string name="notes_attachment_one">%1$d вложение</string>
+    <string name="notes_attachment_few">%1$d вложения</string>
+    <string name="notes_attachment_many">%1$d вложений</string>
+    <string name="notes_attachment_photo">%1$d фото</string>
+    <string name="notes_attachment_video">%1$d видео</string>
+    <string name="notes_attachment_audio">%1$d аудио</string>
+    <string name="notes_attachment_file">%1$d файл.</string>
+    <string name="notes_checklist_more">+ ещё %1$d</string>
+    <string name="reminder_note_open">Открыть заметку</string>
+    <string name="service_notes_channel">ЗаметкиPro</string>
+    <string name="service_copy_attachment_title">Копирование вложений в заметки</string>
+    <string name="service_copy_files_title">Копирование файлов</string>
+    <string name="service_copy_files_text">Копирование файлов…</string>
+    <string name="service_copy_progress">Копирование: %1$s</string>
+    <string name="service_copy_broken">сломанные</string>
+    <string name="service_delete_files_title">Удаление файлов</string>
+    <string name="service_delete_files_text">Удаление файлов…</string>
+    <string name="service_delete_done">Удалено: %1$d</string>
+    <string name="backup_archiving_file">Архивация: %1$s</string>
+    <string name="backup_preparing">Подготовка…</string>
+    <string name="backup_unpacking_file">Распаковка: %1$s</string>
+    <string name="backup_unpacking">Распаковка…</string>
+    <string name="reminder_utils_channel_name">Напоминания</string>
+    <string name="reminder_utils_channel_desc">Уведомления о заметках</string>
+    <string name="video_error_title">Ошибка воспроизведения</string>
+    <string name="video_title_label">Видео</string>
+    <string name="audio_title_label">Аудио</string>
+    <string name="day_one">день</string>
+    <string name="day_few">дня</string>
+    <string name="day_many">дней</string>
+    <string name="main_move_to_trash_desc">Будут перемещены в корзину</string>
+    <string name="reminder_prefix">⏰ %1$s</string>
+    <string name="edit_mode_toggle_desc">Переключить в режим редактирования</string>
+    <string name="remove_protection_first">Сначала снимите защиту с заметки</string>
+    <string name="install_password">Установите пароль</string>
+    <string name="confirm_save_title">Сохранить изменения?</string>
+
+    <!-- Auto Backup -->
+    <string name="backup_auto_title">Автоматическое рез. копирование</string>
+    <string name="backup_auto_desc">Резервное копирование каждый день в 3:00 ночи</string>
+    <string name="backup_auto_folder_title">Папка для авто-копий</string>
+    <string name="backup_auto_folder_desc">Выберите путь для сохранения</string>
+    <string name="backup_notification_channel">Резервное копирование</string>
+    <string name="backup_notification_progress">Выполняется резервное копирование…</string>
+    <string name="backup_notification_success">Резервная копия успешно создана</string>
+    <string name="backup_notification_error">Ошибка автоматического копирования: %1$s</string>
+    <string name="edit_note_attachments_deleted">Удалено вложений: %1$d</string>
+    <string name="edit_note_saved_multi">Сохранено: %1$d</string>
+    <string name="edit_note_failed_multi">не удалось: %1$d</string>
+    <plurals name="edit_note_remove_attachments_q">
+        <item quantity="one">Удалить %d вложение?</item>
+        <item quantity="few">Удалить %d вложения?</item>
+        <item quantity="many">Удалить %d вложений?</item>
+        <item quantity="other">Удалить %d вложений?</item>
+    </plurals>
+    <!-- Действие при смахивании -->
+    <string name="settings_swipe_action">Действие при смахивании</string>
+    <string name="swipe_mode_trash_archive">Корзина | Архив</string>
+    <string name="swipe_mode_archive_trash">Архив | Корзина</string>
+    <string name="swipe_mode_archive_only">Архив</string>
+    <string name="swipe_mode_trash_only">Корзина</string>
+    <string name="swipe_mode_off">Ничего не делать</string>
+    <string name="cancel_uppercase">ОТМЕНИТЬ</string>
+    <!-- Пункты меню -->
+    <string name="settings_menu_items">Пункты меню</string>
+    <string name="menu_item_pinned">Закреплённые</string>
+    <string name="menu_item_favorite">Избранные</string>
+    <string name="menu_item_checklist">Чек-листы</string>
+    <string name="menu_item_reminder">Напоминания</string>
+    <string name="done_uppercase">ГОТОВО</string>
+    <string name="settings_menu_items_subtitle">Выберите, какие пункты показывать</string>
+    <string name="checklist_drag_desc">Перетащить</string>
+    <string name="settings_default_text_size">Размер текста</string>
+    <string name="settings_preview_lines">Количество строк предпросмотра</string>
+    <string name="settings_attachment_columns">Колонки вложений</string>
+</resources>

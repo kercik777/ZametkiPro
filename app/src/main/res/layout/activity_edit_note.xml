@@ -1,0 +1,520 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    
+    android:background="@color/bg_primary">
+
+    <!-- Top bar -->
+    <LinearLayout
+        android:id="@+id/top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="6dp">
+
+        <ImageView
+            android:id="@+id/btn_back"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_back"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <ImageView
+            android:id="@+id/btn_pin"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_pin_outline"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+
+        <ImageView
+            android:id="@+id/btn_fav"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_lock"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+
+        <ImageView
+            android:id="@+id/btn_reminder_quick"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_alarm"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+
+        <ImageView
+            android:id="@+id/btn_find_replace"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_search"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+
+        <ImageView
+            android:id="@+id/btn_palette"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_palette"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+
+        <ImageView
+            android:id="@+id/btn_read_mode"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_eye"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+    </LinearLayout>
+
+    <!-- Selection bar для вложений (как в MainActivity) -->
+    <LinearLayout
+        android:id="@+id/selection_bar_attachments"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp"
+        android:background="@color/bg_tertiary"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/sel_att_close"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_close"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+
+        <TextView
+            android:id="@+id/tv_selection_count_att"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:textColor="@color/text_primary"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/sel_att_select_all"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_select_all"
+            android:padding="9dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+
+        <ImageView
+            android:id="@+id/sel_att_share"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_share"
+            android:padding="9dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+
+        <ImageView
+            android:id="@+id/sel_att_save"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_save"
+            android:padding="9dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+
+        <ImageView
+            android:id="@+id/sel_att_delete"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_delete"
+            android:padding="9dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/error" />
+    </LinearLayout>
+
+    <!-- Категория и напоминание -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="6dp">
+
+        <TextView
+            android:id="@+id/tv_category"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:textColor="@color/gold_primary"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.04"
+            android:background="@drawable/bg_button_outline_gold" />
+
+        <TextView
+            android:id="@+id/tv_reminder"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:textColor="@color/gold_primary"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:background="@drawable/bg_button_outline_gold"
+            android:visibility="gone"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- Прогресс копирования -->
+    <LinearLayout
+        android:id="@+id/progress_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="14dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginTop="4dp"
+        android:background="@drawable/bg_search_field"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/progress_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/gold_primary"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <ProgressBar
+            android:id="@+id/progress_indicator"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:indeterminate="true"
+            android:max="100"
+            android:progressTint="@color/gold_primary"
+            android:indeterminateTint="@color/gold_primary"
+            android:progressBackgroundTint="@color/bg_tertiary" />
+    </LinearLayout>
+
+    <!-- Контент: ScrollView + клик на ScrollView фокусирует EditText -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scroll_content"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scrollbars="vertical"
+        android:fadeScrollbars="true"
+        android:scrollbarDefaultDelayBeforeFade="450"
+        android:scrollbarFadeDuration="250"
+        android:scrollbarAlwaysDrawVerticalTrack="false"
+        android:overScrollMode="ifContentScrolls"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:id="@+id/content_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="20dp">
+
+            <!-- Вложения сверху -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_attachments"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:nestedScrollingEnabled="false"
+                android:visibility="gone" />
+
+            <EditText
+                android:id="@+id/et_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/title_hint"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_tertiary"
+                android:textSize="26sp"
+                android:textStyle="bold"
+                android:background="@null"
+                android:inputType="textCapSentences|textMultiLine"
+                android:maxLines="3"
+                android:lineSpacingMultiplier="1.1"
+                android:imeOptions="actionNext" />
+
+            <!-- EditText контента: minHeight большой, чтобы тапы по пустому месту работали -->
+            <EditText
+                android:id="@+id/et_content"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="280dp"
+                android:hint="@string/content_hint"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_tertiary"
+                android:textSize="16sp"
+                android:background="@null"
+                android:gravity="top"
+                android:inputType="textCapSentences|textMultiLine|textAutoCorrect"
+                android:lineSpacingMultiplier="1.45"
+                android:layout_marginTop="14dp"
+                android:autoLink="web|email|phone"
+                android:linksClickable="true"
+                android:scrollbars="vertical"
+                android:fadeScrollbars="true"
+                android:scrollbarDefaultDelayBeforeFade="450"
+                android:scrollbarFadeDuration="250"
+                android:scrollbarAlwaysDrawVerticalTrack="false"
+                android:textColorLink="@color/gold_light" />
+
+            <com.zametki.pro.views.ExpandedRecyclerView
+                android:id="@+id/rv_checklist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:nestedScrollingEnabled="false"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/btn_add_item"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_button_ghost"
+                android:visibility="gone">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_add"
+                    android:layout_marginEnd="8dp"
+                    app:tint="@color/gold_primary" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/add_item"
+                    android:textColor="@color/gold_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- Bottom bar: attach | checklist | undo | redo | more -->
+    <LinearLayout
+        android:id="@+id/bottom_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@color/bg_primary">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/divider" />
+
+        <LinearLayout
+            android:id="@+id/bottom_actions_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp">
+
+            <ImageView
+                android:id="@+id/btn_attach"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="10dp"
+                android:src="@drawable/ic_attach"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/icon_accent" />
+
+            <ImageView
+                android:id="@+id/btn_checklist_toggle"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="10dp"
+                android:src="@drawable/ic_checklist"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/icon_accent" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <!-- Undo/Redo по центру -->
+            <ImageView
+                android:id="@+id/btn_undo"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_undo"
+                android:padding="10dp"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/icon_accent" />
+
+            <ImageView
+                android:id="@+id/btn_redo"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_redo"
+                android:padding="10dp"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/icon_accent" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageView
+                android:id="@+id/btn_more"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_more"
+                android:padding="10dp"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/icon_accent" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/search_bar_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="10dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/et_find_inline"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_search_field"
+                android:hint="@string/search_hint"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_tertiary"
+                android:inputType="text"
+                android:maxLines="1" />
+
+            <ImageView
+                android:id="@+id/btn_search_more"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_more"
+                android:padding="10dp"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/icon_accent" />
+
+            <ImageView
+                android:id="@+id/btn_search_close"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_close"
+                android:padding="10dp"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/icon_accent" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/read_mode_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_eye"
+                app:tint="@color/gold_primary" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="10dp"
+                android:text="@string/read_mode_enabled_title"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btn_switch_to_edit"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:gravity="center"
+                android:minWidth="132dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:text="@string/read_mode_switch_to_edit"
+                android:textColor="@color/text_on_gold"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:background="@drawable/bg_button_gold" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

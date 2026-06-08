@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_secondary">
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp">
+
+            <!-- Название приложения теперь часть прокручиваемого списка
+                 (без отдельного фона и линий — единый стиль с пунктами). -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:text="@string/app_name"
+                android:textColor="@color/text_primary"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.02" />
+
+            <LinearLayout android:id="@+id/drawer_all" style="@style/DrawerRow">
+                <ImageView style="@style/DrawerIcon" android:src="@drawable/ic_notes" />
+                <TextView style="@style/DrawerText" android:text="@string/filter_all" />
+                <TextView android:id="@+id/count_all" style="@style/DrawerCount" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/drawer_pinned" style="@style/DrawerRow">
+                <ImageView style="@style/DrawerIcon" android:src="@drawable/ic_pin_outline" />
+                <TextView style="@style/DrawerText" android:text="@string/filter_pinned" />
+                <TextView android:id="@+id/count_pinned" style="@style/DrawerCount" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/drawer_fav" style="@style/DrawerRow">
+                <ImageView style="@style/DrawerIcon" android:src="@drawable/ic_star_outline" />
+                <TextView style="@style/DrawerText" android:text="@string/filter_favorites" />
+                <TextView android:id="@+id/count_fav" style="@style/DrawerCount" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/drawer_check" style="@style/DrawerRow">
+                <ImageView style="@style/DrawerIcon" android:src="@drawable/ic_checklist" />
+                <TextView style="@style/DrawerText" android:text="@string/filter_checklists" />
+                <TextView android:id="@+id/count_check" style="@style/DrawerCount" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/drawer_reminders" style="@style/DrawerRow">
+                <ImageView style="@style/DrawerIcon" android:src="@drawable/ic_alarm" />
+                <TextView style="@style/DrawerText" android:text="@string/nav_reminders" />
+                <TextView android:id="@+id/count_reminders" style="@style/DrawerCount" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/drawer_archive" style="@style/DrawerRow">
+                <ImageView style="@style/DrawerIcon" android:src="@drawable/ic_archive" />
+                <TextView style="@style/DrawerText" android:text="@string/nav_archive" />
+                <TextView android:id="@+id/count_arch" style="@style/DrawerCount" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/drawer_trash" style="@style/DrawerRow">
+                <ImageView style="@style/DrawerIcon" android:src="@drawable/ic_delete" />
+                <TextView style="@style/DrawerText" android:text="@string/nav_trash" />
+                <TextView android:id="@+id/count_trash" style="@style/DrawerCount" />
+            </LinearLayout>
+
+            <View style="@style/DrawerDivider" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="14dp"
+                android:paddingBottom="6dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/nav_categories"
+                    android:textColor="@color/gold_primary"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.18" />
+
+                <ImageView
+                    android:id="@+id/drawer_add_category"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/ic_add"
+                    android:padding="6dp"
+                    android:background="@drawable/bg_ripple_circle"
+                    app:tint="@color/gold_primary" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/drawer_cat_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <LinearLayout android:id="@+id/drawer_categories" style="@style/DrawerRow">
+                <ImageView style="@style/DrawerIcon" android:src="@drawable/ic_category" app:tint="@color/icon_accent" />
+                <TextView style="@style/DrawerText" android:text="@string/manage_categories"
+                    android:textColor="@color/text_secondary" android:textSize="13sp" />
+            </LinearLayout>
+
+            <View style="@style/DrawerDivider" />
+
+            <LinearLayout android:id="@+id/drawer_backup" style="@style/DrawerRow">
+                <ImageView style="@style/DrawerIcon" android:src="@drawable/ic_export" />
+                <TextView style="@style/DrawerText" android:text="@string/nav_backup" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/drawer_settings" style="@style/DrawerRow">
+                <ImageView style="@style/DrawerIcon" android:src="@drawable/ic_settings" />
+                <TextView style="@style/DrawerText" android:text="@string/nav_settings" />
+            </LinearLayout>
+
+            <View style="@style/DrawerDivider" />
+
+            <LinearLayout android:id="@+id/drawer_stats" style="@style/DrawerRow">
+                <ImageView style="@style/DrawerIcon" android:src="@drawable/ic_stats" />
+                <TextView style="@style/DrawerText" android:text="@string/nav_statistics" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/drawer_about" style="@style/DrawerRow">
+                <ImageView style="@style/DrawerIcon" android:src="@drawable/ic_info" />
+                <TextView style="@style/DrawerText" android:text="@string/nav_about" />
+            </LinearLayout>
+
+            <View android:layout_width="match_parent" android:layout_height="20dp" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

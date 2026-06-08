@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="10dp"
+    android:paddingBottom="14dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/bg_sheet_handle" />
+
+    <TextView
+        style="@style/SheetSubtitle"
+        android:text="@string/settings_menu_items" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
+
+        <CheckBox
+            android:id="@+id/cb_pinned"
+            style="@style/SettingsCheckRow"
+            android:text="@string/menu_item_pinned" />
+
+        <CheckBox
+            android:id="@+id/cb_favorite"
+            style="@style/SettingsCheckRow"
+            android:text="@string/menu_item_favorite" />
+
+        <CheckBox
+            android:id="@+id/cb_checklist"
+            style="@style/SettingsCheckRow"
+            android:text="@string/menu_item_checklist" />
+
+        <CheckBox
+            android:id="@+id/cb_reminder"
+            style="@style/SettingsCheckRow"
+            android:text="@string/menu_item_reminder" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:layout_marginTop="6dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        tools:ignore="UseCompoundDrawables">
+
+        <TextView
+            android:id="@+id/btn_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:gravity="center"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:text="@string/cancel"
+            android:background="@drawable/bg_ripple_rounded" />
+
+        <TextView
+            android:id="@+id/btn_done"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:gravity="center"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:textColor="@color/text_on_gold"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:text="@string/done"
+            android:background="@drawable/bg_button_gold" />
+    </LinearLayout>
+</LinearLayout>
