@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp">
+
+    <!-- Drag handle: касание сразу запускает перетаскивание (без long-press). -->
+    <ImageView
+        android:id="@+id/iv_drag"
+        android:layout_width="36dp"
+        android:layout_height="40dp"
+        android:padding="8dp"
+        android:src="@drawable/ic_drag"
+        android:background="@drawable/bg_ripple_circle"
+        android:contentDescription="@string/checklist_drag_desc"
+        app:tint="@color/icon_accent" />
+
+    <ImageView
+        android:id="@+id/iv_check"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:padding="9dp"
+        android:src="@drawable/ic_check_box_outline"
+        android:background="@drawable/bg_ripple_circle" />
+
+    <EditText
+        android:id="@+id/et_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="@color/text_primary"
+        android:textColorHint="@color/text_tertiary"
+        android:textSize="15sp"
+        android:hint="@string/checklist_item_hint"
+        android:background="@null"
+        android:inputType="textCapSentences|textMultiLine"
+        android:padding="6dp" />
+
+    <ImageView
+        android:id="@+id/btn_delete"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:padding="11dp"
+        android:src="@drawable/ic_close"
+        android:background="@drawable/bg_ripple_circle"
+        app:tint="@color/icon_accent" />
+</LinearLayout>

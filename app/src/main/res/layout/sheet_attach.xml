@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="10dp"
+    android:paddingBottom="22dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="14dp"
+        android:background="@drawable/bg_sheet_handle" />
+
+    <TextView style="@style/SheetSubtitle" android:text="@string/sheet_attach_title" />
+
+    <TextView
+        android:id="@+id/attach_image"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_image"
+        android:text="@string/sheet_attach_image" />
+
+    <TextView
+        android:id="@+id/attach_video_gallery"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_video_gallery_alt"
+        android:text="@string/sheet_attach_video_gallery" />
+
+    <TextView
+        android:id="@+id/attach_camera"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_camera"
+        android:text="@string/sheet_attach_camera" />
+
+    <TextView
+        android:id="@+id/attach_video"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_videocam"
+        android:text="@string/sheet_attach_video_camera" />
+
+    <TextView
+        android:id="@+id/attach_audio"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_mic"
+        android:text="@string/sheet_attach_audio" />
+
+    <TextView
+        android:id="@+id/attach_file"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_file"
+        android:text="@string/sheet_attach_file" />
+</LinearLayout>

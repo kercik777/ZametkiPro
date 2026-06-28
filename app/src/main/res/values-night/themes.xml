@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ZametkiPro" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="colorPrimary">@color/gold_primary</item>
+        <item name="colorPrimaryVariant">@color/gold_dark</item>
+        <item name="colorOnPrimary">@color/text_on_gold</item>
+        <item name="colorSecondary">@color/gold_light</item>
+        <item name="colorSecondaryVariant">@color/gold_primary</item>
+        <item name="colorOnSecondary">@color/text_on_gold</item>
+
+        <item name="android:colorBackground">@color/bg_primary</item>
+        <item name="colorSurface">@color/bg_secondary</item>
+        <item name="colorOnBackground">@color/text_primary</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorError">@color/error</item>
+
+        <item name="android:windowBackground">@color/bg_primary</item>
+        <item name="android:statusBarColor">@color/status_bar</item>
+        <item name="android:navigationBarColor">@color/nav_bar</item>
+        <item name="android:windowLightStatusBar">@bool/light_status_bar</item>
+        <item name="android:windowLightNavigationBar">@bool/light_nav_bar</item>
+
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:textColorTertiary">@color/text_tertiary</item>
+        <item name="android:textColorHint">@color/text_tertiary</item>
+
+        <item name="android:fontFamily">sans-serif</item>
+
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.ZametkiPro.Dialog</item>
+        <item name="bottomSheetDialogTheme">@style/ThemeOverlay.ZametkiPro.BottomSheet</item>
+        <item name="snackbarStyle">@style/Widget.ZametkiPro.Snackbar</item>
+        <item name="snackbarTextViewStyle">@style/Widget.ZametkiPro.Snackbar.TextView</item>
+        <item name="snackbarButtonStyle">@style/Widget.ZametkiPro.Snackbar.Button</item>
+    </style>
+</resources>
