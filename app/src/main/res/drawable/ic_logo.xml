@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <!-- Внешний круг -->
+    <path
+        android:fillColor="#43A047"
+        android:pathData="M60,0 a60,60 0 1,0 0.1,0 z" />
+    <!-- Внутренний фон -->
+    <path
+        android:fillColor="#0A0A0A"
+        android:pathData="M60,8 a52,52 0 1,0 0.1,0 z" />
+    <!-- Стилизованная Z (Заметки) -->
+    <path
+        android:fillColor="#43A047"
+        android:pathData="M36,40 L84,40 L84,52 L56,76 L84,76 L84,88 L36,88 L36,76 L64,52 L36,52 Z" />
+    <!-- Декоративная точка (золотая капля) -->
+    <path
+        android:fillColor="#66BB6A"
+        android:pathData="M88,32 a4,4 0 1,0 0.1,0 z" />
+</vector>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ===== Dark Premium палитра ===== -->
+    <color name="bg_primary">#0F111D</color>
+    <color name="bg_secondary">#171A2A</color>
+    <color name="bg_tertiary">#1F2336</color>
+    <color name="bg_elevated">#262B40</color>
+    <color name="bg_overlay">#CC000000</color>
+
+    <!-- Золотые акценты -->
+    <color name="gold_primary">#43A047</color>
+    <color name="gold_light">#66BB6A</color>
+    <color name="gold_dark">#2E7D32</color>
+    <color name="gold_pale">#3343A047</color>
+    <color name="gold_subtle">#1A43A047</color>
+
+    <!-- Текст -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B8BBD0</color>
+    <color name="text_tertiary">#7A7E95</color>
+    <color name="text_disabled">#4A4D60</color>
+    <color name="text_on_gold">#FFFFFF</color>
+
+    <!-- Границы и разделители -->
+    <color name="divider">#262B40</color>
+    <color name="border_subtle">#1F2336</color>
+    <color name="border_gold">#6643A047</color>
+
+    <color name="status_bar">#0F111D</color>
+    <color name="nav_bar">#0F111D</color>
+
+    <!-- Цвета заметок (тёмные) -->
+    <color name="note_color_default">#171A2A</color>
+    <color name="note_color_red">#3D1F2A</color>
+    <color name="note_color_orange">#3D2B1F</color>
+    <color name="note_color_yellow">#3D381F</color>
+    <color name="note_color_green">#1F3D2A</color>
+    <color name="note_color_teal">#1F3D3D</color>
+    <color name="note_color_blue">#1F2B45</color>
+    <color name="note_color_purple">#2D1F3D</color>
+    <color name="note_color_pink">#3D1F35</color>
+
+    <!-- Подсветка цветов категорий -->
+    <color name="cat_red">#E74C3C</color>
+    <color name="cat_orange">#E67E22</color>
+    <color name="cat_yellow">#F1C40F</color>
+    <color name="cat_green">#2ECC71</color>
+    <color name="cat_teal">#1ABC9C</color>
+    <color name="cat_blue">#3498DB</color>
+    <color name="cat_purple">#9B59B6</color>
+    <color name="cat_pink">#E91E63</color>
+
+    <!-- Состояния -->
+    <color name="success">#4CAF50</color>
+    <color name="warning">#FFC107</color>
+    <color name="error">#F44336</color>
+    <color name="info">#2196F3</color>
+
+    <color name="ripple_gold">#3343A047</color>
+    <color name="ripple_white">#1AFFFFFF</color>
+    <color name="shimmer">#1A43A047</color>
+
+    <!-- Selection (multi-select) -->
+    <color name="selection_overlay">#3343A047</color>
+
+    <!-- Единый цвет иконок (см. комментарий в values/colors.xml). -->
+    <color name="icon_accent">#B8BBD0</color>
+</resources>

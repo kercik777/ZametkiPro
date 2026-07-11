@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.drawerlayout.widget.DrawerLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/drawer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary">
+
+    <!-- ===== Основной контент ===== -->
+    <androidx.coordinatorlayout.widget.CoordinatorLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/bg_primary">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <!-- Top bar (обычный режим) -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:id="@+id/top_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="14dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp">
+
+                    <ImageView
+                        android:id="@+id/btn_menu"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:src="@drawable/ic_menu"
+                        android:padding="10dp"
+                        android:background="@drawable/bg_ripple_circle"
+                        app:tint="@color/icon_accent" />
+
+                    <TextView
+                        android:id="@+id/tv_screen_title"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/main_all_notes"
+                        android:textColor="@color/icon_accent"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.02"
+                        android:maxLines="1"
+                        android:ellipsize="end" />
+
+                    <ImageView
+                        android:id="@+id/btn_search"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:src="@drawable/ic_search"
+                        android:padding="10dp"
+                        android:background="@drawable/bg_ripple_circle"
+                        app:tint="@color/icon_accent" />
+
+                    <ImageView
+                        android:id="@+id/btn_view_toggle"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:src="@drawable/ic_list"
+                        android:padding="10dp"
+                        android:background="@drawable/bg_ripple_circle"
+                        app:tint="@color/icon_accent" />
+
+                    <ImageView
+                        android:id="@+id/btn_sort"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:src="@drawable/ic_sort"
+                        android:padding="10dp"
+                        android:background="@drawable/bg_ripple_circle"
+                        app:tint="@color/icon_accent" />
+                </LinearLayout>
+
+                <!-- Selection bar -->
+                <LinearLayout
+                    android:id="@+id/selection_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="6dp"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="14dp"
+                    android:background="@color/bg_tertiary"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:id="@+id/sel_close"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:src="@drawable/ic_close"
+                        android:padding="10dp"
+                        android:background="@drawable/bg_ripple_circle"
+                        app:tint="@color/icon_accent" />
+
+                    <TextView
+                        android:id="@+id/tv_selection_count"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:textColor="@color/text_primary"
+                        android:textSize="17sp"
+                        android:textStyle="bold" />
+
+                    <ImageView
+                        android:id="@+id/sel_select_all"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_select_all"
+                        android:padding="9dp"
+                        android:background="@drawable/bg_ripple_circle"
+                        app:tint="@color/icon_accent" />
+
+                    <ImageView
+                        android:id="@+id/sel_pin"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_pin_outline"
+                        android:padding="9dp"
+                        android:background="@drawable/bg_ripple_circle"
+                        app:tint="@color/icon_accent" />
+
+                    <ImageView
+                        android:id="@+id/sel_color"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_palette"
+                        android:padding="9dp"
+                        android:background="@drawable/bg_ripple_circle"
+                        app:tint="@color/icon_accent" />
+
+                    <ImageView
+                        android:id="@+id/sel_category"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_category"
+                        android:padding="9dp"
+                        android:background="@drawable/bg_ripple_circle"
+                        app:tint="@color/icon_accent" />
+
+                    <ImageView
+                        android:id="@+id/sel_archive"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_archive"
+                        android:padding="9dp"
+                        android:background="@drawable/bg_ripple_circle"
+                        app:tint="@color/icon_accent" />
+
+                    <ImageView
+                        android:id="@+id/sel_restore"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_restore"
+                        android:padding="9dp"
+                        android:background="@drawable/bg_ripple_circle"
+                        app:tint="@color/icon_accent" />
+
+                    <ImageView
+                        android:id="@+id/sel_delete"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_delete"
+                        android:padding="9dp"
+                        android:background="@drawable/bg_ripple_circle"
+                        app:tint="@color/error" />
+                </LinearLayout>
+            </FrameLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/divider" />
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recycler"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:padding="8dp"
+                    android:clipToPadding="false"
+                    android:scrollbars="vertical"
+                    android:fadeScrollbars="true"
+                    android:scrollbarDefaultDelayBeforeFade="450"
+                    android:scrollbarFadeDuration="250"
+                    android:scrollbarStyle="outsideOverlay"
+                    android:scrollbarAlwaysDrawVerticalTrack="false"
+                    android:overScrollMode="ifContentScrolls"
+                    android:paddingBottom="100dp" />
+
+                <include
+                    android:id="@+id/empty_state"
+                    layout="@layout/include_empty_state"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/fab_add"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="18dp"
+            android:background="@drawable/bg_fab_gold"
+            android:elevation="12dp"
+            android:foreground="@drawable/bg_ripple_circle">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_add" />
+        </FrameLayout>
+    </androidx.coordinatorlayout.widget.CoordinatorLayout>
+
+    <!-- ===== Drawer ===== -->
+    <include
+        android:id="@+id/drawer_content"
+        layout="@layout/drawer_content"
+        android:layout_width="300dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start" />
+</androidx.drawerlayout.widget.DrawerLayout>

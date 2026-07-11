@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_primary">
+
+    <!-- Топ-бар -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="14dp">
+
+        <ImageView
+            android:id="@+id/btn_back"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_back"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="Аудиоплеер заметки"
+            android:textColor="@color/text_primary"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/btn_playlist"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_player_playlist"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="24dp">
+
+        <!-- Вращающаяся виниловая пластинка -->
+        <FrameLayout
+            android:id="@+id/layout_vinyl"
+            android:layout_width="200dp"
+            android:layout_height="200dp"
+            android:background="@drawable/bg_logo_gradient_subtle">
+
+            <!-- Внутренний круг диска -->
+            <View
+                android:layout_width="160dp"
+                android:layout_height="160dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_ripple_circle" />
+
+            <ImageView
+                android:id="@+id/iv_vinyl_icon"
+                android:layout_width="90dp"
+                android:layout_height="90dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_audio"
+                app:tint="@color/gold_primary" />
+        </FrameLayout>
+
+        <!-- Текст названия песни -->
+        <TextView
+            android:id="@+id/tv_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="center"
+            android:textColor="@color/text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:maxLines="2"
+            android:ellipsize="end" />
+
+        <!-- Индикатор очереди (например, "Песня 2 из 5") -->
+        <TextView
+            android:id="@+id/tv_track_index"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="1 из 1"
+            android:textColor="@color/text_tertiary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <!-- Слайдер SeekBar -->
+        <SeekBar
+            android:id="@+id/seek_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:progressTint="@color/gold_primary"
+            android:thumbTint="@color/gold_primary"
+            android:progressBackgroundTint="@color/bg_tertiary" />
+
+        <!-- Длительность -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:layout_marginTop="4dp">
+
+            <TextView
+                android:id="@+id/tv_current"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="00:00"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/tv_total"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <!-- Блок расширенного управления воспроизведением -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="28dp">
+
+            <!-- Кнопка случайного порядка (Shuffle) -->
+            <ImageView
+                android:id="@+id/btn_shuffle"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_player_shuffle"
+                android:padding="10dp"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/text_tertiary"
+                android:layout_weight="1" />
+
+            <!-- Предыдущая песня -->
+            <ImageView
+                android:id="@+id/btn_prev"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:src="@drawable/ic_player_prev"
+                android:padding="12dp"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/icon_accent"
+                android:layout_weight="1" />
+
+            <!-- Воспроизведение / Пауза (FAB) -->
+            <ImageView
+                android:id="@+id/btn_play"
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:src="@drawable/ic_play"
+                android:padding="18dp"
+                android:background="@drawable/bg_fab_gold"
+                app:tint="@color/text_on_gold" />
+
+            <!-- Следующая песня -->
+            <ImageView
+                android:id="@+id/btn_next"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:src="@drawable/ic_player_next"
+                android:padding="12dp"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/icon_accent"
+                android:layout_weight="1" />
+
+            <!-- Кнопка повтора (Repeat) -->
+            <ImageView
+                android:id="@+id/btn_repeat"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_player_repeat"
+                android:padding="10dp"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/text_tertiary"
+                android:layout_weight="1" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_primary">
+
+    <!-- Топ-бар -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="8dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
+
+        <ImageView
+            android:id="@+id/btn_back"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_back"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent"
+            android:contentDescription="@string/cd_back" />
+
+        <TextView
+            android:id="@+id/tv_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:textColor="@color/text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="middle"
+            android:letterSpacing="0.02" />
+
+        <ImageView
+            android:id="@+id/btn_search"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_search"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent"
+            android:layout_marginStart="4dp" />
+
+        <ImageView
+            android:id="@+id/btn_info"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_info"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent"
+            android:layout_marginStart="4dp" />
+
+        <ImageView
+            android:id="@+id/btn_more"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_more"
+            android:padding="10dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider" />
+
+    <!-- Панель поиска в файле (GONE по умолчанию) -->
+    <LinearLayout
+        android:id="@+id/search_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:background="@color/bg_secondary"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/bg_search_field"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_search"
+                app:tint="@color/text_tertiary" />
+
+            <EditText
+                android:id="@+id/et_search"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="4dp"
+                android:background="@android:color/transparent"
+                android:hint="Поиск в файле..."
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_tertiary"
+                android:textSize="14sp"
+                android:singleLine="true"
+                android:inputType="text" />
+
+            <TextView
+                android:id="@+id/tv_search_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0/0"
+                android:textColor="@color/text_tertiary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/btn_search_prev"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_arrow_down"
+            android:rotation="180"
+            android:padding="8dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent"
+            android:layout_marginStart="6dp" />
+
+        <ImageView
+            android:id="@+id/btn_search_next"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_arrow_down"
+            android:padding="8dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent"
+            android:layout_marginStart="4dp" />
+
+        <ImageView
+            android:id="@+id/btn_search_close"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_close"
+            android:padding="8dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+
+    <View
+        android:id="@+id/search_divider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider"
+        android:visibility="gone" />
+
+    <!-- Основной контейнер содержимого -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Спиннер загрузки -->
+        <LinearLayout
+            android:id="@+id/loading_layout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="20dp">
+
+            <ProgressBar
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:indeterminateTint="@color/gold_primary" />
+
+            <TextView
+                android:id="@+id/tv_loading_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="Загрузка файла..."
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- Область просмотра на основе ScrollView (скрыта при загрузке) -->
+        <ScrollView
+            android:id="@+id/scroll_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:scrollbars="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/content_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="12dp"
+                android:paddingBottom="24dp">
+
+                <!-- Номера строк (скрываются или показываются по желанию) -->
+                <TextView
+                    android:id="@+id/tv_line_numbers"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:gravity="end"
+                    android:textColor="@color/text_tertiary"
+                    android:textSize="14sp"
+                    android:lineSpacingMultiplier="1.2"
+                    android:text="1" />
+
+                <!-- Текст с горизонтальным скроллом (Word Wrap = OFF) -->
+                <HorizontalScrollView
+                    android:id="@+id/horizontal_scroll_view"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fillViewport="true"
+                    android:scrollbars="horizontal">
+
+                    <TextView
+                        android:id="@+id/tv_content_scrollable"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="24dp"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp"
+                        android:lineSpacingMultiplier="1.2"
+                        android:textIsSelectable="true" />
+                </HorizontalScrollView>
+
+                <!-- Текст с автопереносом строк (Word Wrap = ON) -->
+                <TextView
+                    android:id="@+id/tv_content_wrapped"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="16dp"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:lineSpacingMultiplier="1.2"
+                    android:textIsSelectable="true"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+        </ScrollView>
+    </FrameLayout>
+</LinearLayout>

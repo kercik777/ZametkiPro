@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bottomsheet"
+    android:paddingStart="20dp"
+    android:paddingEnd="20dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="20dp">
+
+    <!-- Ручка шторки -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:background="@drawable/bg_sheet_handle"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Заголовок -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="14dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Многострочное выделение"
+            android:textColor="@color/gold_primary"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/btn_close_select"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_close"
+            android:padding="8dp"
+            android:background="@drawable/bg_ripple_circle"
+            app:tint="@color/icon_accent" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Зажмите текст и тяните курсоры вверх или вниз для свободного копирования любых строк."
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Прокручиваемый блок с текстом -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_settings_section"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/tv_selectable_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:lineSpacingMultiplier="1.2"
+            android:textIsSelectable="true" />
+    </ScrollView>
+
+    <!-- Нижняя кнопка копирования -->
+    <Button
+        android:id="@+id/btn_copy_selected"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:text="Копировать выделенное"
+        android:textColor="@color/text_on_gold"
+        android:background="@drawable/bg_button_gold"
+        android:textStyle="bold" />
+</LinearLayout>

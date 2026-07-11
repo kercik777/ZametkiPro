@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="10dp"
+    android:paddingBottom="22dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/bg_sheet_handle" />
+
+    <TextView style="@style/SheetSubtitle" android:text="@string/settings_theme" />
+
+    <LinearLayout android:id="@+id/theme_dark" style="@style/SheetSortRow">
+        <TextView style="@style/MenuTextStyle" android:text="@string/theme_dark" />
+        <ImageView android:id="@+id/iv_check" android:layout_width="20dp" android:layout_height="20dp"
+            android:src="@drawable/ic_check" app:tint="@color/gold_primary" android:visibility="invisible" />
+    </LinearLayout>
+
+    <LinearLayout android:id="@+id/theme_light" style="@style/SheetSortRow">
+        <TextView style="@style/MenuTextStyle" android:text="@string/theme_light" />
+        <ImageView android:id="@+id/iv_check" android:layout_width="20dp" android:layout_height="20dp"
+            android:src="@drawable/ic_check" app:tint="@color/gold_primary" android:visibility="invisible" />
+    </LinearLayout>
+
+    <LinearLayout android:id="@+id/theme_system" style="@style/SheetSortRow">
+        <TextView style="@style/MenuTextStyle" android:text="@string/theme_system" />
+        <ImageView android:id="@+id/iv_check" android:layout_width="20dp" android:layout_height="20dp"
+            android:src="@drawable/ic_check" app:tint="@color/gold_primary" android:visibility="invisible" />
+    </LinearLayout>
+</LinearLayout>
