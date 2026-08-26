@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="10dp"
+    android:paddingBottom="22dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/bg_sheet_handle" />
+
+    <TextView
+        android:id="@+id/tv_title"
+        style="@style/SheetSubtitle"
+        android:text="@string/settings_trash_auto_delete" />
+
+    <TextView
+        android:id="@+id/row_off"
+        style="@style/SheetActionRow"
+        android:text="@string/trash_auto_delete_off" />
+
+    <TextView
+        android:id="@+id/row_7"
+        style="@style/SheetActionRow"
+        android:text="@string/trash_auto_delete_7" />
+
+    <TextView
+        android:id="@+id/row_10"
+        style="@style/SheetActionRow"
+        android:text="@string/trash_auto_delete_10" />
+
+    <TextView
+        android:id="@+id/row_15"
+        style="@style/SheetActionRow"
+        android:text="@string/trash_auto_delete_15" />
+
+    <TextView
+        android:id="@+id/row_30"
+        style="@style/SheetActionRow"
+        android:text="@string/trash_auto_delete_30" />
+
+</LinearLayout>

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="10dp"
+    android:paddingBottom="22dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="14dp"
+        android:background="@drawable/bg_sheet_handle" />
+
+    <TextView
+        android:id="@+id/action_favorite"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_star_outline"
+        android:text="@string/sheet_add_favorite" />
+
+    <TextView
+        android:id="@+id/action_archive"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_archive"
+        android:text="@string/archive" />
+
+    <TextView
+        android:id="@+id/action_convert"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_checklist"
+        android:text="@string/convert_to_checklist" />
+
+    <TextView
+        android:id="@+id/action_duplicate"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_copy"
+        android:text="@string/duplicate" />
+
+    <TextView
+        android:id="@+id/action_text_size"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_text_size_sheet"
+        android:text="@string/sheet_text_size_title" />
+
+    <TextView
+        android:id="@+id/action_share"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_share"
+        android:text="@string/share" />
+
+    <TextView
+        android:id="@+id/action_read_aloud"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_audio"
+        android:text="@string/sheet_read_aloud" />
+
+    <TextView
+        android:id="@+id/action_copy"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_copy_note_sheet"
+        android:text="@string/copy_note" />
+
+    <TextView
+        android:id="@+id/action_info"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_info"
+        android:text="@string/sheet_info_title_note" />
+
+    <TextView
+        android:id="@+id/action_restore"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_restore"
+        android:text="@string/restore"
+        android:visibility="gone" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginStart="22dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="22dp"
+        android:layout_marginBottom="4dp"
+        android:background="@color/divider" />
+
+    <TextView
+        android:id="@+id/action_delete"
+        style="@style/SheetActionRow.Danger"
+        android:drawableStart="@drawable/ic_delete"
+        android:text="@string/delete" />
+</LinearLayout>

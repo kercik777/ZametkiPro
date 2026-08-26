@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Светлая тема — переопределение цветов -->
+    <color name="bg_primary">#FAFAFA</color>
+    <color name="bg_secondary">#FFFFFF</color>
+    <color name="bg_tertiary">#F0F0F2</color>
+    <color name="bg_elevated">#FFFFFF</color>
+
+    <color name="text_primary">#0F111D</color>
+    <color name="text_secondary">#5A5E72</color>
+    <color name="text_tertiary">#8A8E9C</color>
+    <color name="text_disabled">#C0C2CC</color>
+
+    <color name="divider">#E0E0E5</color>
+    <color name="border_subtle">#ECECF0</color>
+
+    <color name="status_bar">#FAFAFA</color>
+    <color name="nav_bar">#FAFAFA</color>
+
+    <!-- Цвета заметок (более светлые в светлой теме) -->
+    <color name="note_color_default">#FFFFFF</color>
+    <color name="note_color_red">#FFEBEE</color>
+    <color name="note_color_orange">#FFF3E0</color>
+    <color name="note_color_yellow">#FFFDE7</color>
+    <color name="note_color_green">#E8F5E9</color>
+    <color name="note_color_teal">#E0F2F1</color>
+    <color name="note_color_blue">#E3F2FD</color>
+    <color name="note_color_purple">#F3E5F5</color>
+    <color name="note_color_pink">#FCE4EC</color>
+
+    <!-- Единый цвет иконок (см. комментарий в values/colors.xml). -->
+    <color name="icon_accent">#5A5E72</color>
+</resources>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="10dp"
+    android:paddingBottom="22dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/bg_sheet_handle" />
+
+    <TextView
+        android:id="@+id/tv_title"
+        style="@style/SheetTitle"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider"
+        android:layout_marginStart="22dp"
+        android:layout_marginEnd="22dp"
+        android:layout_marginBottom="6dp" />
+
+    <TextView
+        android:id="@+id/action_edit"
+        style="@style/SheetActionRow"
+        android:drawableStart="@drawable/ic_edit"
+        android:text="@string/edit" />
+
+    <TextView
+        android:id="@+id/action_delete"
+        style="@style/SheetActionRow.Danger"
+        android:drawableStart="@drawable/ic_delete"
+        android:text="@string/delete" />
+</LinearLayout>

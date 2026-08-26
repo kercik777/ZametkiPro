@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bottomsheet"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="24dp">
+
+    <!-- Ручка шторки -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:background="@drawable/bg_sheet_handle"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Заголовок и панель выбора -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="14dp">
+
+        <!-- Обычный заголовок -->
+        <TextView
+            android:id="@+id/tv_playlist_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Список изображений"
+            android:textColor="@color/gold_primary"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- Панель выбора (изначально скрыта) -->
+        <LinearLayout
+            android:id="@+id/layout_selection_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tv_selection_count"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Выбрано: 0"
+                android:textColor="@color/gold_primary"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/btn_select_all"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_select_all"
+                android:padding="8dp"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/icon_accent"
+                android:layout_marginEnd="8dp" />
+
+            <ImageView
+                android:id="@+id/btn_delete_selected"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_delete"
+                android:padding="8dp"
+                android:background="@drawable/bg_ripple_circle"
+                app:tint="@color/error" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Список картинок (в 3 колонки, автоматически регулирует свою высоту) -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_playlist"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_settings_section"
+        android:padding="6dp"
+        android:scrollbars="vertical" />
+
+    <Button
+        android:id="@+id/btn_close_playlist"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Закрыть"
+        android:textColor="@color/text_on_gold"
+        android:background="@drawable/bg_button_gold"
+        android:layout_marginTop="16dp"
+        android:textStyle="bold" />
+</LinearLayout>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24.0"
+    android:viewportHeight="24.0"
+    android:tint="#FFFFFFFF">
+    
+    <!-- Линии плейлиста (верхняя длинная, средняя и нижняя короткие) -->
+    <path
+        android:fillColor="#ff000000"
+        android:pathData="M3,6 h18 v2 H3 z 
+                          M3,12 h8 v2 H3 z 
+                          M3,18 h8 v2 H3 z" />
+    
+    <!-- Рамка иконки картинки (сплошной квадрат с вырезанной серединой для совместимости) -->
+    <path
+        android:fillColor="#ff000000"
+        android:pathData="M13,11 h10 v10 h-10 z 
+                          M14.5,12.5 v7 h7 v-7 z" />
+    
+    <!-- Пейзаж (горы) внутри рамки -->
+    <path
+        android:fillColor="#ff000000"
+        android:pathData="M14.5,19.5 l2.5,-3.5 l1.5,2 l1.5,-2.5 l1.5,4 z" />
+</vector>

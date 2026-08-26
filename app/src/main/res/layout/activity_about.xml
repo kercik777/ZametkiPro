@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_primary">
+
+    <include layout="@layout/include_top_bar" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:padding="24dp">
+
+            <!-- Логотип приложения -->
+            <FrameLayout
+                android:layout_width="160dp"
+                android:layout_height="160dp"
+                android:layout_marginTop="14dp"
+                android:background="@drawable/bg_logo_gradient_subtle">
+
+                <ImageView
+                    android:id="@+id/iv_logo"
+                    android:layout_width="120dp"
+                    android:layout_height="120dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_logo" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/app_name"
+                android:textColor="@color/text_primary"
+                android:textSize="28sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.04" />
+
+            <TextView
+                android:id="@+id/tv_version"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/about_version_label"
+                android:textColor="@color/gold_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.1" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:gravity="center"
+                android:text="@string/about_description"
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:lineSpacingMultiplier="1.5"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp" />
+
+            <!-- Интерактивный раздел обратной связи и поддержки -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="28dp"
+                android:background="@drawable/bg_settings_section">
+
+                <!-- Связаться с нами (Email) -->
+                <LinearLayout
+                    android:id="@+id/row_contact"
+                    style="@style/SettingsRow">
+                    <ImageView
+                        style="@style/SettingsIcon"
+                        android:src="@drawable/ic_inbox"
+                        app:tint="@color/gold_primary" />
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Связаться с нами"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Написать письмо автору на почту"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+
+                <View style="@style/SettingsDiv" />
+
+                <!-- Наш Телеграм -->
+                <LinearLayout
+                    android:id="@+id/row_telegram"
+                    style="@style/SettingsRow">
+                    <ImageView
+                        style="@style/SettingsIcon"
+                        android:src="@drawable/ic_logo"
+                        app:tint="@color/gold_primary" />
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Наш Telegram-канал"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Присоединиться к официальному сообществу"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+
+                <View style="@style/SettingsDiv" />
+
+                <!-- Поддержка развития -->
+                <LinearLayout
+                    android:id="@+id/row_support_dev"
+                    style="@style/SettingsRow">
+                    <ImageView
+                        style="@style/SettingsIcon"
+                        android:src="@drawable/ic_heart"
+                        app:tint="@color/gold_primary" />
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Поддержать проект"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Помочь развитию приложения TmNote Pro"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+
+                <View style="@style/SettingsDiv" />
+
+                <!-- Поделиться приложением -->
+                <LinearLayout
+                    android:id="@+id/row_share_app"
+                    style="@style/SettingsRow">
+                    <ImageView
+                        style="@style/SettingsIcon"
+                        android:src="@drawable/ic_share"
+                        app:tint="@color/gold_primary" />
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Рассказать друзьям"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Поделиться ссылкой на скачивание"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+                    <ImageView style="@style/SettingsArrow" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Фирменная подпись автора -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:layout_marginBottom="20dp"
+                android:text="@string/about_made_with"
+                android:textColor="@color/gold_primary"
+                android:textSize="13sp"
+                android:textStyle="italic"
+                android:letterSpacing="0.04" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
