@@ -514,6 +514,10 @@
     <string name="settings_preview_lines">Количество строк предпросмотра</string>
     <string name="settings_attachment_columns">Колонки вложений</string>
 
+    <!-- Deprecated active links (kept for backward compat with old layouts in Sketchware) -->
+    <string name="settings_active_links">Активные ссылки</string>
+    <string name="settings_active_links_desc">Подсвечивать ссылки в заметках</string>
+
     <!-- Настройки списков -->
     <string name="settings_checklist_title">Списки</string>
     <string name="settings_checklist_group_title">Список</string>
