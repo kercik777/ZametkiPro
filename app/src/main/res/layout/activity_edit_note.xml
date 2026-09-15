@@ -279,12 +279,13 @@
                 android:textSize="26sp"
                 android:textStyle="bold"
                 android:background="@null"
-                android:inputType="textCapSentences|textMultiLine"
+                android:inputType="textCapSentences|textMultiLine|textNoSuggestions"
                 android:maxLines="3"
                 android:lineSpacingMultiplier="1.1"
-                android:imeOptions="actionNext" />
+                android:imeOptions="actionNext"
+                android:importantForAutofill="no" />
 
-            <!-- EditText контента: minHeight большой, чтобы тапы по пустому месту работали -->
+            <!-- EditText контента: оптимизирован для больших заметок -->
             <EditText
                 android:id="@+id/et_content"
                 android:layout_width="match_parent"
@@ -296,17 +297,18 @@
                 android:textSize="16sp"
                 android:background="@null"
                 android:gravity="top"
-                android:inputType="textCapSentences|textMultiLine|textAutoCorrect"
+                android:inputType="textCapSentences|textMultiLine|textNoSuggestions"
                 android:lineSpacingMultiplier="1.45"
                 android:layout_marginTop="14dp"
-                android:autoLink="web|email|phone"
-                android:linksClickable="true"
                 android:scrollbars="vertical"
                 android:fadeScrollbars="true"
                 android:scrollbarDefaultDelayBeforeFade="450"
                 android:scrollbarFadeDuration="250"
                 android:scrollbarAlwaysDrawVerticalTrack="false"
-                android:textColorLink="@color/gold_light" />
+                android:breakStrategy="simple"
+                android:hyphenationFrequency="none"
+                android:importantForAutofill="no"
+                android:isScrollContainer="false" />
 
             <tkm.tmnote.pro.views.ExpandedRecyclerView
                 android:id="@+id/rv_checklist"

@@ -557,9 +557,13 @@ public class TextFileViewerActivity extends AppCompatActivity {
             int end = start + queryLen;
             if (end > fileContent.length()) continue;
 
-            int color = (i == currentSearchIndex) 
-                ? 0xFFD4AF37 
-                : 0x5543A047;
+            int color;
+            if (i == currentSearchIndex) {
+                try { color = androidx.core.content.ContextCompat.getColor(TextFileViewerActivity.this, R.color.gold_primary); }
+                catch (Exception e) { color = 0xFFD4AF37; }
+            } else {
+                color = 0x5543A047;
+            }
 
             builder.setSpan(new BackgroundColorSpan(color), start, end, SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
         }

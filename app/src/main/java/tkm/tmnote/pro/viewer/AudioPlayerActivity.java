@@ -99,8 +99,17 @@ public class AudioPlayerActivity extends AppCompatActivity {
         setContentView(R.layout.activity_audio_player);
         tkm.tmnote.pro.utils.SystemBarsHelper.apply(this);
 
-        // Получаем список аудиофайлов
-        List<Attachment> list = (List<Attachment>) getIntent().getSerializableExtra("audios");
+        // Получаем список аудиофайлов — через Parcelable
+        ArrayList<Attachment> list = null;
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                list = getIntent().getParcelableArrayListExtra("audios", Attachment.class);
+            } else {
+                list = getIntent().getParcelableArrayListExtra("audios");
+            }
+        } catch (Exception e) {
+            list = null;
+        }
         currentPosition = getIntent().getIntExtra("index", 0);
         noteId = getIntent().getLongExtra("note_id", 0L);
         repo = new tkm.tmnote.pro.db.NotesRepository(this);

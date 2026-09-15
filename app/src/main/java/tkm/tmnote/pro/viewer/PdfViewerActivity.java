@@ -175,7 +175,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                 int reqH = (int) (hPage * scale);
                 
                 Bitmap bitmap = Bitmap.createBitmap(reqW, reqH, Bitmap.Config.ARGB_8888);
-                bitmap.eraseColor(0xFFFFFFFF); // Белый фон страницы
+                bitmap.eraseColor(android.graphics.Color.WHITE); // Белый фон страницы
                 
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 h.imageView.setImageBitmap(bitmap);

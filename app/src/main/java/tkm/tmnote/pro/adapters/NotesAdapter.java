@@ -4,7 +4,6 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.view.LayoutInflater;
@@ -91,10 +90,12 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
 
     private static final String TAG_CHECKLIST_PREVIEW = "tag_checklist_preview";
     private static final String TAG_CHECKLIST_MORE = "tag_checklist_more";
+    private int cachedPreviewLines = -1;
+    private long previewLinesCacheTime = 0;
 
 
     public NotesAdapter(Context ctx, List<Note> data, OnAction listener) {
-        this.ctx = ctx;
+        this.ctx = ctx.getApplicationContext();
         this.data = data;
         this.listener = listener;
         this.archivePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -115,6 +116,10 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
         pruneSelection();
         notifyDataSetChanged();
         if (dataChangeListener != null) dataChangeListener.onDataChanged();
+    }
+
+    public List<Note> getData() {
+        return data != null ? data : new ArrayList<>();
     }
 
     public void setViewMode(int mode) {
@@ -269,7 +274,6 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
                             ? ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT
                             : 0;
                 }
-                // В обычных фильтрах (не архив/корзина) применяем настройку swipeMode
                 if (swipeContextFilter != 4 && swipeContextFilter != 5
                         && swipeMode == PrefsManager.SWIPE_MODE_OFF) {
                     swipeFlags = 0;
@@ -288,6 +292,7 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
                 int from = src.getBindingAdapterPosition();
                 int to = dst.getBindingAdapterPosition();
                 if (from < 0 || to < 0) return false;
+                if (from >= data.size() || to >= data.size()) return false;
                 Collections.swap(data, from, to);
                 notifyItemMoved(from, to);
                 return true;
@@ -339,7 +344,6 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
                 if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && vh instanceof VH) {
                     float fraction = Math.min(1f, Math.abs(dX) / Math.max(1f, vh.itemView.getWidth()));
                     configureSwipeLayer((VH) vh, dX, fraction);
-                    // Apply alpha to contentLayer only to avoid conflict with RecyclerView animations
                     if (((VH) vh).contentLayer != null) {
                         ((VH) vh).contentLayer.setAlpha(Math.max(0.84f, 1f - (0.16f * fraction)));
                     }
@@ -354,16 +358,14 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
     private void configureSwipeLayer(VH h, float dX, float fraction) {
         if (h == null || h.swipeLayer == null || h.swipeBg == null) return;
         h.swipeLayer.setAlpha(Math.min(1f, Math.max(0f, fraction)));
-        h.swipeStart.setVisibility(View.GONE);
-        h.swipeEnd.setVisibility(View.GONE);
+        if (h.swipeStart != null) h.swipeStart.setVisibility(View.GONE);
+        if (h.swipeEnd != null) h.swipeEnd.setVisibility(View.GONE);
 
         int baseColor;
         ImageView iconView;
         int iconRes;
         boolean rightSwipe = dX > 0f;
-        // Определяем визуал в зависимости от контекста и пользовательской настройки
         if (swipeContextFilter == 4 || swipeContextFilter == 5) {
-            // Архив / Корзина — стандартное поведение
             if (rightSwipe) {
                 baseColor = archivePaint.getColor();
                 iconView = h.swipeStart;
@@ -374,11 +376,9 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
                 iconRes = R.drawable.ic_delete;
             }
         } else {
-            // Обычный список — зависит от swipeMode
-            int actionType; // 0=archive, 1=trash
+            int actionType;
             switch (swipeMode) {
                 case PrefsManager.SWIPE_MODE_TRASH_ARCHIVE:
-                    // "Корзина | Архив" — влево: корзина, вправо: архив
                     actionType = rightSwipe ? 0 : 1;
                     break;
                 case PrefsManager.SWIPE_MODE_ARCHIVE_ONLY:
@@ -389,7 +389,6 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
                     break;
                 case PrefsManager.SWIPE_MODE_ARCHIVE_TRASH:
                 default:
-                    // "Архив | Корзина" — влево: архив, вправо: корзина
                     actionType = rightSwipe ? 1 : 0;
                     break;
             }
@@ -405,10 +404,12 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
 
         GradientDrawable bg = createSwipeDrawable(baseColor);
         h.swipeBg.setBackground(bg);
-        iconView.setVisibility(View.VISIBLE);
-        iconView.setImageResource(iconRes);
-        iconView.setColorFilter(Color.WHITE);
-        iconView.setAlpha(Math.min(1f, Math.max(0.45f, fraction)));
+        if (iconView != null) {
+            iconView.setVisibility(View.VISIBLE);
+            iconView.setImageResource(iconRes);
+            iconView.setColorFilter(Color.WHITE);
+            iconView.setAlpha(Math.min(1f, Math.max(0.45f, fraction)));
+        }
     }
 
     private GradientDrawable createSwipeDrawable(int color) {
@@ -460,6 +461,7 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
 
     @Override
     public void onBindViewHolder(@NonNull VH h, int pos) {
+        if (pos < 0 || pos >= data.size()) return;
         Note n = data.get(pos);
         boolean isSelected = selected.contains(n.getId());
 
@@ -470,7 +472,7 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
                     ? R.drawable.bg_card_pinned_stroke : R.drawable.bg_card_note_stroke);
         }
         h.itemView.setActivated(isSelected);
-        h.selectionOverlay.setVisibility(isSelected ? View.VISIBLE : View.GONE);
+        if (h.selectionOverlay != null) h.selectionOverlay.setVisibility(isSelected ? View.VISIBLE : View.GONE);
         resetSwipeState(h);
 
         if (h.colorBar != null) {
@@ -484,7 +486,6 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
             h.colorBar.setVisibility(n.getColorIndex() == 0 ? View.GONE : View.VISIBLE);
         }
 
-        // Применяем индивидуальный размер текста заметки (из note.textSize)
         h.title.setTextSize(computeTitleSize(n.getTextSize()));
         h.preview.setTextSize(computePreviewSize(n.getTextSize()));
 
@@ -498,7 +499,7 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
             if (h.attachmentsContainer != null) h.attachmentsContainer.setVisibility(View.GONE);
         } else {
             if (h.attachmentsContainer != null) {
-                renderAttachmentsPreview(h.attachmentsContainer, n);
+                renderAttachmentsPreview(h, n);
             }
             if (n.getTitle().trim().isEmpty()) {
                 h.title.setVisibility(View.GONE);
@@ -526,8 +527,7 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
                 } else {
                     h.preview.setVisibility(View.VISIBLE);
                     h.preview.setText(content);
-                    int previewLines = new PrefsManager(ctx).getPreviewMaxLines();
-                    h.preview.setMaxLines(previewLines);
+                    h.preview.setMaxLines(getPreviewMaxLinesCached());
                 }
             }
         }
@@ -536,9 +536,11 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
         h.iconFav.setVisibility(n.isFavorite() ? View.VISIBLE : View.GONE);
         h.iconLock.setVisibility(n.isLocked() ? View.VISIBLE : View.GONE);
         h.iconReminder.setVisibility(n.getReminderAt() > 0 ? View.VISIBLE : View.GONE);
-        h.iconReminder.setColorFilter(ContextCompat.getColor(ctx,
-                n.getReminderAt() > 0 && n.getReminderAt() < System.currentTimeMillis()
-                        ? R.color.warning : R.color.gold_primary));
+        if (h.iconReminder != null) {
+            h.iconReminder.setColorFilter(ContextCompat.getColor(ctx,
+                    n.getReminderAt() > 0 && n.getReminderAt() < System.currentTimeMillis()
+                            ? R.color.warning : R.color.gold_primary));
+        }
 
         boolean showDate = showDateEnabled;
         StringBuilder bottomText = new StringBuilder();
@@ -549,13 +551,15 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
             if (c != null) {
                 if (bottomText.length() > 0) bottomText.append(" · ");
                 bottomText.append(c.getName());
-                h.categoryDot.setVisibility(View.VISIBLE);
-                GradientDrawable gd = new GradientDrawable();
-                gd.setShape(GradientDrawable.OVAL);
-                gd.setColor(ColorUtils.getCategoryColor(ctx, c.getColorIndex()));
-                h.categoryDot.setBackground(gd);
-            } else h.categoryDot.setVisibility(View.GONE);
-        } else h.categoryDot.setVisibility(View.GONE);
+                if (h.categoryDot != null) {
+                    h.categoryDot.setVisibility(View.VISIBLE);
+                    GradientDrawable gd = new GradientDrawable();
+                    gd.setShape(GradientDrawable.OVAL);
+                    gd.setColor(ColorUtils.getCategoryColor(ctx, c.getColorIndex()));
+                    h.categoryDot.setBackground(gd);
+                }
+            } else if (h.categoryDot != null) h.categoryDot.setVisibility(View.GONE);
+        } else if (h.categoryDot != null) h.categoryDot.setVisibility(View.GONE);
 
         if (bottomText.length() == 0) h.meta.setVisibility(View.GONE);
         else { h.meta.setVisibility(View.VISIBLE); h.meta.setText(bottomText.toString()); }
@@ -568,7 +572,7 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
                 if (!isSelectionMode()) {
                     selected.add(n.getId());
                     h.itemView.setActivated(true);
-                    h.selectionOverlay.setVisibility(View.VISIBLE);
+                    if (h.selectionOverlay != null) h.selectionOverlay.setVisibility(View.VISIBLE);
                     if (selectionListener != null) {
                         selectionListener.onSelectionChanged(selected.size());
                     }
@@ -587,6 +591,44 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
             if (listener != null) listener.onAction(n, Action.LONG_CLICK, v);
             return true;
         });
+    }
+
+    @Override
+    public void onViewRecycled(@NonNull VH holder) {
+        super.onViewRecycled(holder);
+        resetSwipeState(holder);
+        // Clear Glide to avoid leaks and wrong images
+        if (holder.attachmentsContainer != null) {
+            for (int i = 0; i < holder.attachmentsContainer.getChildCount(); i++) {
+                View child = holder.attachmentsContainer.getChildAt(i);
+                if (child instanceof ViewGroup) {
+                    ViewGroup vg = (ViewGroup) child;
+                    for (int j = 0; j < vg.getChildCount(); j++) {
+                        View inner = vg.getChildAt(j);
+                        if (inner instanceof ImageView) {
+                            try { Glide.with(ctx).clear((ImageView) inner); } catch (Exception ignored) {}
+                        }
+                    }
+                }
+            }
+            holder.attachmentsContainer.removeAllViews();
+        }
+        if (holder.checklistContainer != null) {
+            holder.checklistContainer.removeAllViews();
+        }
+    }
+
+    private int getPreviewMaxLinesCached() {
+        long now = System.currentTimeMillis();
+        if (cachedPreviewLines < 0 || now - previewLinesCacheTime > 2000) {
+            try {
+                cachedPreviewLines = new PrefsManager(ctx).getPreviewMaxLines();
+            } catch (Exception e) {
+                cachedPreviewLines = 10;
+            }
+            previewLinesCacheTime = now;
+        }
+        return cachedPreviewLines;
     }
 
     private String buildTextPreview(String content) {
@@ -618,46 +660,33 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
     }
 
     private void renderChecklistPreview(LinearLayout container, List<ChecklistItem> items) {
+        if (container == null) return;
+        container.removeAllViews();
         container.setVisibility(View.VISIBLE);
-        TextView preview = ensureChecklistPreviewView(container);
-        TextView more = ensureChecklistMoreView(container);
-
+        if (items == null || items.isEmpty()) {
+            container.setVisibility(View.GONE);
+            return;
+        }
+        TextView preview = new TextView(ctx);
+        preview.setTag(TAG_CHECKLIST_PREVIEW);
+        preview.setTextColor(colorTextSecondary);
+        preview.setTextSize(13);
+        preview.setLineSpacing(0f, 1.2f);
         int max = Math.min(items.size(), viewMode == PrefsManager.VIEW_GRID ? 5 : 3);
         preview.setText(buildChecklistPreviewText(items, max));
-        preview.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
+        container.addView(preview);
 
         int remaining = Math.max(0, items.size() - max);
         if (remaining > 0) {
+            TextView more = new TextView(ctx);
+            more.setTag(TAG_CHECKLIST_MORE);
+            more.setTextColor(colorTextTertiary);
+            more.setTextSize(12);
+            int padPx = (int) (4 * density);
+            more.setPadding(0, padPx, 0, 0);
             more.setText(ctx.getString(R.string.notes_checklist_more, remaining));
-            more.setVisibility(View.VISIBLE);
-        } else {
-            more.setVisibility(View.GONE);
+            container.addView(more);
         }
-    }
-
-    private TextView ensureChecklistPreviewView(LinearLayout container) {
-        View view = container.findViewWithTag(TAG_CHECKLIST_PREVIEW);
-        if (view instanceof TextView) return (TextView) view;
-        TextView tv = new TextView(ctx);
-        tv.setTag(TAG_CHECKLIST_PREVIEW);
-        tv.setTextColor(colorTextSecondary);
-        tv.setTextSize(13);
-        tv.setLineSpacing(0f, 1.2f);
-        container.addView(tv, 0);
-        return tv;
-    }
-
-    private TextView ensureChecklistMoreView(LinearLayout container) {
-        View view = container.findViewWithTag(TAG_CHECKLIST_MORE);
-        if (view instanceof TextView) return (TextView) view;
-        TextView tv = new TextView(ctx);
-        tv.setTag(TAG_CHECKLIST_MORE);
-        tv.setTextColor(colorTextTertiary);
-        tv.setTextSize(12);
-        int padPx = (int) (4 * density);
-        tv.setPadding(0, padPx, 0, 0);
-        container.addView(tv);
-        return tv;
     }
 
     private String buildChecklistPreviewText(List<ChecklistItem> items, int max) {
@@ -672,7 +701,9 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
         return sb.toString().trim();
     }
 
-    private void renderAttachmentsPreview(LinearLayout container, Note n) {
+    private void renderAttachmentsPreview(VH holder, Note n) {
+        LinearLayout container = holder.attachmentsContainer;
+        if (container == null) return;
         container.removeAllViews();
         List<Attachment> atts = n.getAttachments();
         if (atts == null || atts.isEmpty()) {
@@ -731,33 +762,6 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
         return frame;
     }
 
-    private View createMoreAttachmentsCell(int remainingCount) {
-        android.widget.FrameLayout frame = new android.widget.FrameLayout(ctx);
-        frame.setBackgroundResource(R.drawable.bg_attachment_preview_top);
-        if (Build.VERSION.SDK_INT >= 21) frame.setClipToOutline(true);
-
-        View shade = new View(ctx);
-        shade.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        shade.setBackgroundColor(adjustAlpha(colorTextSecondary, 0.18f));
-        frame.addView(shade);
-
-        TextView more = new TextView(ctx);
-        android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.gravity = android.view.Gravity.CENTER;
-        more.setLayoutParams(lp);
-        more.setText("+" + remainingCount);
-        more.setTextColor(ContextCompat.getColor(ctx, android.R.color.white));
-        more.setTextSize(18f);
-        more.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
-        more.setTypeface(more.getTypeface(), android.graphics.Typeface.BOLD);
-        frame.addView(more);
-        return frame;
-    }
-
     private void bindAttachmentPreview(ImageView view, ImageView playOverlay, Attachment attachment) {
         if (attachment == null || view == null) return;
         if (playOverlay != null) playOverlay.setVisibility(View.GONE);
@@ -765,36 +769,55 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
         switch (attachment.type) {
             case Attachment.TYPE_IMAGE: {
                 File file = AttachmentUtils.getFile(ctx, attachment.fileName);
+                if (file == null || !file.exists()) {
+                    view.setImageResource(R.drawable.ic_image);
+                    view.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+                    view.setColorFilter(colorGoldPrimary);
+                    break;
+                }
                 view.setScaleType(ImageView.ScaleType.CENTER_CROP);
                 view.setPadding(0, 0, 0, 0);
                 view.setColorFilter(null);
-                Glide.with(view)
-                        .load(file)
-                        .diskCacheStrategy(DiskCacheStrategy.ALL)
-                        .dontAnimate()
-                        .centerCrop()
-                        .error(R.drawable.ic_image)
-                        .into(view);
+                try {
+                    Glide.with(ctx)
+                            .load(file)
+                            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                            .dontAnimate()
+                            .centerCrop()
+                            .error(R.drawable.ic_image)
+                            .into(view);
+                } catch (Exception e) {
+                    view.setImageResource(R.drawable.ic_image);
+                }
                 break;
             }
             case Attachment.TYPE_VIDEO: {
                 File file = AttachmentUtils.getFile(ctx, attachment.fileName);
+                if (file == null || !file.exists()) {
+                    view.setImageResource(R.drawable.ic_videocam);
+                    break;
+                }
                 view.setScaleType(ImageView.ScaleType.CENTER_CROP);
                 view.setPadding(0, 0, 0, 0);
                 view.setColorFilter(null);
-                Glide.with(view)
-                        .asBitmap()
-                        .load(file)
-                        .apply(new RequestOptions()
-                                .frame(1_000_000L)
-                                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                                .centerCrop())
-                        .dontAnimate()
-                        .error(R.drawable.ic_videocam)
-                        .into(view);
+                try {
+                    Glide.with(ctx)
+                            .asBitmap()
+                            .load(file)
+                            .apply(new RequestOptions()
+                                    .frame(1_000_000L)
+                                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                                    .centerCrop())
+                            .dontAnimate()
+                            .error(R.drawable.ic_videocam)
+                            .into(view);
+                } catch (Exception e) {
+                    view.setImageResource(R.drawable.ic_videocam);
+                }
                 break;
             }
             default:
+                try { Glide.with(ctx).clear(view); } catch (Exception ignored) {}
                 view.setImageResource(iconForAttachment(attachment.type));
                 view.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
                 int pad = dp(18);
@@ -845,27 +868,13 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
     @Override
     public int getItemCount() { return data.size(); }
 
-    /** Размер preview в карточке для заданной заметки (в sp), с клампом. */
     private float computePreviewSize(int noteTextSize) {
-        // База для preview = noteTextSize - 3 (16 → 13, как было).
         float v = noteTextSize - 3f;
         return Math.max(10f, Math.min(20f, v));
     }
-    /** Размер title в карточке = preview + 2 (чтобы был чуть крупнее). */
     private float computeTitleSize(int noteTextSize) {
-        // База для title = noteTextSize - 1 (16 → 15, как было).
         float v = noteTextSize - 1f;
         return Math.max(12f, Math.min(22f, v));
-    }
-
-
-    private String formatAttachmentCount(int count) {
-        if (count <= 0) return "";
-        if (count % 10 == 1 && count % 100 != 11) return ctx.getString(R.string.notes_attachment_one, count);
-        if ((count % 10 >= 2 && count % 10 <= 4) && (count % 100 < 12 || count % 100 > 14)) {
-            return ctx.getString(R.string.notes_attachment_few, count);
-        }
-        return ctx.getString(R.string.notes_attachment_many, count);
     }
 
     static class VH extends RecyclerView.ViewHolder {

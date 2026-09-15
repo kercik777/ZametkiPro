@@ -22,6 +22,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -80,6 +81,8 @@ public class MainActivity extends AppCompatActivity {
     private Runnable pendingUnlockAction;
     private int notesLoadGeneration = 0;
     private int countsLoadGeneration = 0;
+    private int categoriesLoadGeneration = 0;
+    private int drawerCategoriesGeneration = 0;
     private List<Category> categoriesCache = new ArrayList<>();
 
     private NotesRepository.DashboardCounts cachedCounts;
@@ -106,6 +109,11 @@ public class MainActivity extends AppCompatActivity {
     private final BroadcastReceiver progressReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
+            if (intent == null) return;
+            if (!tkm.tmnote.pro.services.AttachmentCopyService.ACTION_PROGRESS.equals(intent.getAction())) return;
+            // Validate package to avoid spoofing
+            if (intent.getPackage() != null && !intent.getPackage().equals(getPackageName())) return;
+            invalidateCountsCache();
             loadNotes();
         }
     };
@@ -133,7 +141,7 @@ public class MainActivity extends AppCompatActivity {
         tkm.tmnote.pro.utils.SystemBarsHelper.prepare(this);
 
         repo = new NotesRepository(this);
-        categoriesCache = repo.getAllCategories();
+        categoriesCache = new ArrayList<>();
         ReminderUtils.ensureChannel(this);
 
         drawer = findViewById(R.id.drawer);
@@ -214,6 +222,10 @@ public class MainActivity extends AppCompatActivity {
         setupSelectionBar();
         setupDrawerStaticItems();
         applyFilterUiRules();
+        // Initial load to avoid empty screen on first launch
+        try { loadNotes(); } catch (Exception e) {
+            try { android.util.Log.e("MainActivity", "Initial loadNotes failed", e); } catch (Exception ignored) {}
+        }
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -249,31 +261,59 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        // Фоновые задачи: очистка и планирование
+        // Фоновые задачи: очистка и планирование + загрузка категорий
         AppExecutors.getInstance().diskIO().execute(() -> {
+            try {
+                List<Category> cats = repo.getAllCategories();
+                AppExecutors.getInstance().mainThread(() -> {
+                    categoriesCache = cats != null ? cats : new ArrayList<>();
+                    if (adapter != null) adapter.setCategories(categoriesCache);
+                    rebuildDrawerCategories();
+                    applyDrawerMenuVisibility();
+                    applyActiveDrawerHighlight();
+                    updateScreenTitle();
+                    // Ensure notes are loaded even if onResume hasn't yet triggered
+                    loadNotes();
+                });
+            } catch (Exception e) {
+                try { android.util.Log.e("MainActivity", "load categories failed", e); } catch (Exception ignored) {}
+                AppExecutors.getInstance().mainThread(() -> {
+                    // Even on error, try to load notes
+                    try { loadNotes(); } catch (Exception ex) {
+                        try { android.util.Log.e("MainActivity", "loadNotes fallback failed", ex); } catch (Exception ignored2) {}
+                    }
+                });
+            }
+
             // Очистка корзины (независимо)
             try {
-                TrashCleanupScheduler.cleanupNow(this);
-                TrashCleanupScheduler.schedule(this);
-            } catch (Exception ignored) {}
+                TrashCleanupScheduler.cleanupNow(MainActivity.this);
+                TrashCleanupScheduler.schedule(MainActivity.this);
+            } catch (Exception e) {
+                try { android.util.Log.e("MainActivity", "Trash cleanup failed", e); } catch (Exception ignored) {}
+            }
 
             // Резервное копирование (независимо)
             try {
-                AutoBackupScheduler.schedule(this);
-            } catch (Exception ignored) {}
+                AutoBackupScheduler.schedule(MainActivity.this);
+            } catch (Exception e) {
+                try { android.util.Log.e("MainActivity", "AutoBackup schedule failed", e); } catch (Exception ignored) {}
+            }
 
             // Очистка временных файлов
             try {
-                AttachmentUtils.cleanupOrphanedFiles(this, repo.getAllNotesIncludingTrashed());
+                AttachmentUtils.cleanupOrphanedFiles(MainActivity.this, repo.getAllNotesIncludingTrashed());
                 File cache = new File(getFilesDir(), "cache");
                 File[] cf = cache.listFiles();
                 long now = System.currentTimeMillis();
                 if (cf != null) {
                     for (File f : cf) {
-                        if (now - f.lastModified() > 60_000L) f.delete();
+                        if (f != null && now - f.lastModified() > 60_000L) f.delete();
                     }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                try { android.util.Log.e("MainActivity", "cleanup orphaned failed", e); } catch (Exception ignored) {}
+            }
         });
     }
 
@@ -354,7 +394,7 @@ public class MainActivity extends AppCompatActivity {
                 );
                 fabView.setLayoutParams(fabLp);
             }
-            return insets;
+            return androidx.core.view.WindowInsetsCompat.CONSUMED;
         });
         androidx.core.view.ViewCompat.requestApplyInsets(drawer);
     }
@@ -362,28 +402,56 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        categoriesCache = repo.getAllCategories();
-        rebuildDrawerCategories();
-        applyDrawerMenuVisibility();
-        applyActiveDrawerHighlight();
-        updateScreenTitle();
-        applyFilterUiRules();
-        if (adapter != null) {
-            adapter.setCategories(categoriesCache);
-            adapter.setShowDateEnabled(prefs.isShowDateEnabled());
-        }
-        loadNotes();
+        // Async load categories to avoid ANR, but ensure notes show on first entry
+        final int gen = ++categoriesLoadGeneration;
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            List<Category> cats;
+            try { cats = repo.getAllCategories(); } catch (Exception e) { cats = new ArrayList<>(); }
+            final List<Category> finalCats = cats != null ? cats : new ArrayList<>();
+            AppExecutors.getInstance().mainThread(() -> {
+                // On first launch adapter empty, don't discard even if generation outdated
+                if (gen != categoriesLoadGeneration && adapter != null && adapter.getItemCount() > 0) return;
+                categoriesCache = finalCats;
+                if (adapter != null) {
+                    adapter.setCategories(categoriesCache);
+                    adapter.setShowDateEnabled(prefs.isShowDateEnabled());
+                }
+                rebuildDrawerCategories();
+                applyDrawerMenuVisibility();
+                applyActiveDrawerHighlight();
+                updateScreenTitle();
+                applyFilterUiRules();
+                loadNotes();
+            });
+        });
+
         try {
-            registerReceiver(progressReceiver, new IntentFilter(
-                    tkm.tmnote.pro.services.AttachmentCopyService.ACTION_PROGRESS),
-                    Build.VERSION.SDK_INT >= 33 ? Context.RECEIVER_NOT_EXPORTED : 0);
-        } catch (Exception ignored) {}
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(progressReceiver, new IntentFilter(
+                        tkm.tmnote.pro.services.AttachmentCopyService.ACTION_PROGRESS),
+                        Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                ContextCompat.registerReceiver(this, progressReceiver,
+                        new IntentFilter(tkm.tmnote.pro.services.AttachmentCopyService.ACTION_PROGRESS),
+                        ContextCompat.RECEIVER_NOT_EXPORTED);
+            }
+        } catch (Exception e) {
+            try { android.util.Log.e("MainActivity", "register progressReceiver failed", e); } catch (Exception ignored) {}
+            try {
+                registerReceiver(progressReceiver, new IntentFilter(
+                        tkm.tmnote.pro.services.AttachmentCopyService.ACTION_PROGRESS));
+            } catch (Exception e2) {
+                try { android.util.Log.e("MainActivity", "register progressReceiver fallback failed", e2); } catch (Exception ignored2) {}
+            }
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        try { unregisterReceiver(progressReceiver); } catch (Exception ignored) {}
+        try { unregisterReceiver(progressReceiver); } catch (Exception e) {
+            try { android.util.Log.e("MainActivity", "unregister progressReceiver failed", e); } catch (Exception ignored) {}
+        }
     }
 
     private void applyViewMode() {
@@ -399,7 +467,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (adapter.getItemTouchHelper() != null) {
-            try { adapter.getItemTouchHelper().attachToRecyclerView(null); } catch (Exception ignored) {}
+            try { adapter.getItemTouchHelper().attachToRecyclerView(null); } catch (Exception e) {
+                try { android.util.Log.e("MainActivity", "detach touchHelper failed", e); } catch (Exception ignored) {}
+            }
         }
         androidx.recyclerview.widget.ItemTouchHelper helper = adapter.createTouchHelper(recycler, repo);
         helper.attachToRecyclerView(recycler);
@@ -448,8 +518,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateScreenTitle() {
         if (currentCategoryId > 0) {
-            Category c = repo.getCategoryById(currentCategoryId);
-            tvScreenTitle.setText(c != null ? c.getName() : getString(R.string.main_all_notes));
+            AppExecutors.getInstance().diskIO().execute(() -> {
+                Category c = repo.getCategoryById(currentCategoryId);
+                AppExecutors.getInstance().mainThread(() -> {
+                    tvScreenTitle.setText(c != null ? c.getName() : getString(R.string.main_all_notes));
+                });
+            });
             return;
         }
         switch (currentFilter) {
@@ -514,7 +588,6 @@ public class MainActivity extends AppCompatActivity {
         if (vReminder != null)  vReminder.setVisibility((mask & PrefsManager.MENU_ITEM_REMINDER) != 0 ? View.VISIBLE : View.GONE);
         if (vAttachments != null) vAttachments.setVisibility((mask & PrefsManager.MENU_ITEM_ATTACHMENTS) != 0 ? View.VISIBLE : View.GONE);
 
-        // Если текущий фильтр стал скрыт — сбрасываем на "Все"
         boolean currentHidden =
                 (currentFilter == 1 && (mask & PrefsManager.MENU_ITEM_PINNED) == 0)
              || (currentFilter == 3 && (mask & PrefsManager.MENU_ITEM_FAVORITE) == 0)
@@ -527,18 +600,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * Сначала плавно закрывает drawer, и только после завершения анимации (или через таймаут)
-     * запускает новую активность с переходом slide_in_right / slide_out_left.
-     * Гарантирует, что Activity стартует ровно один раз: колбэк onDrawerClosed
-     * И fallback по таймауту синхронизированы через флаг `launched` и явное снятие колбэков.
-     */
     private boolean drawerNavInProgress = false;
     private void navigateFromDrawer(Intent intent) {
         if (drawerNavInProgress) return;
         drawerNavInProgress = true;
 
-        // Однократный запуск: первый, кто вызовет launch.run(), снимет вторую попытку.
         final boolean[] launched = { false };
         final Runnable[] fallbackHolder = { null };
         final DrawerLayout.DrawerListener[] listenerHolder = { null };
@@ -546,7 +612,6 @@ public class MainActivity extends AppCompatActivity {
         Runnable launch = () -> {
             if (launched[0]) return;
             launched[0] = true;
-            // Снимаем fallback и отписываем listener — иначе второй вызов сработает.
             if (drawer != null && fallbackHolder[0] != null) {
                 drawer.removeCallbacks(fallbackHolder[0]);
             }
@@ -557,7 +622,9 @@ public class MainActivity extends AppCompatActivity {
             try {
                 startActivity(intent);
                 overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                try { android.util.Log.e("MainActivity", "navigateFromDrawer failed", e); } catch (Exception ignored) {}
+            }
         };
 
         if (drawer != null && drawer.isDrawerOpen(GravityCompat.START)) {
@@ -569,8 +636,6 @@ public class MainActivity extends AppCompatActivity {
             listenerHolder[0] = listener;
             drawer.addDrawerListener(listener);
             drawer.closeDrawer(GravityCompat.START);
-
-            // Подстраховка: если по каким-то причинам колбэк не сработал — fallback через 400 мс.
             Runnable fallback = launch;
             fallbackHolder[0] = fallback;
             drawer.postDelayed(fallback, 400L);
@@ -579,14 +644,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * Обновляет «капсулу» вокруг активного системного пункта drawer
-     * (Все, Закреплённые, Избранные, Чек-листы, Напоминания, Архив, Корзина).
-     * Активна та строка, у которой нет выбранной категории (currentCategoryId<=0)
-     * и currentFilter совпадает с её фильтром.
-     */
     private void applyActiveDrawerHighlight() {
-        // Если выбрана пользовательская категория — НИ ОДИН системный пункт не активен.
         boolean systemActive = (currentCategoryId <= 0);
         int activeId = -1;
         if (systemActive) {
@@ -670,46 +728,60 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void rebuildDrawerCategories() {
-        drawerCatList.removeAllViews();
-        LayoutInflater inf = LayoutInflater.from(this);
-        List<Category> cats = repo.getAllCategoriesWithNotesCount();
-        if (cats.isEmpty()) {
-            TextView empty = new TextView(this);
-            empty.setText(getString(R.string.main_no_categories_hint));
-            empty.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.text_tertiary));
-            empty.setTextSize(11);
-            empty.setGravity(android.view.Gravity.CENTER);
-            int p = (int) (16 * getResources().getDisplayMetrics().density);
-            empty.setPadding(p, p, p, p);
-            drawerCatList.addView(empty);
-            return;
-        }
-        for (Category c : cats) {
-            View row = inf.inflate(R.layout.item_drawer_category, drawerCatList, false);
-            TextView name = row.findViewById(R.id.tv_name);
-            TextView count = row.findViewById(R.id.tv_count);
-            View dot = row.findViewById(R.id.v_dot);
-            ImageView lock = row.findViewById(R.id.iv_lock);
-            ImageView hidden = row.findViewById(R.id.iv_hidden);
-            name.setText(c.getName());
-            count.setText(String.valueOf(c.getNotesCount()));
-            GradientDrawable gd = (GradientDrawable) dot.getBackground().mutate();
-            gd.setColor(ColorUtils.getCategoryColor(this, c.getColorIndex()));
-            lock.setVisibility(c.isLocked() ? View.VISIBLE : View.GONE);
-            hidden.setVisibility(c.isHiddenFromAll() ? View.VISIBLE : View.GONE);
+        if (drawerCatList == null) return;
+        final int gen = ++drawerCategoriesGeneration;
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            List<Category> cats;
+            try {
+                cats = repo.getAllCategoriesWithNotesCount();
+            } catch (Exception e) {
+                cats = new ArrayList<>();
+            }
+            final List<Category> finalCats = cats;
+            AppExecutors.getInstance().mainThread(() -> {
+                if (gen != drawerCategoriesGeneration) return;
+                if (drawerCatList == null) return;
+                drawerCatList.removeAllViews();
+                LayoutInflater inf = LayoutInflater.from(MainActivity.this);
+                if (finalCats.isEmpty()) {
+                    TextView empty = new TextView(MainActivity.this);
+                    empty.setText(getString(R.string.main_no_categories_hint));
+                    empty.setTextColor(ContextCompat.getColor(MainActivity.this, R.color.text_tertiary));
+                    empty.setTextSize(11);
+                    empty.setGravity(android.view.Gravity.CENTER);
+                    int p = (int) (16 * getResources().getDisplayMetrics().density);
+                    empty.setPadding(p, p, p, p);
+                    drawerCatList.addView(empty);
+                    return;
+                }
+                for (Category c : finalCats) {
+                    View row = inf.inflate(R.layout.item_drawer_category, drawerCatList, false);
+                    TextView name = row.findViewById(R.id.tv_name);
+                    TextView count = row.findViewById(R.id.tv_count);
+                    View dot = row.findViewById(R.id.v_dot);
+                    ImageView lock = row.findViewById(R.id.iv_lock);
+                    ImageView hidden = row.findViewById(R.id.iv_hidden);
+                    name.setText(c.getName());
+                    count.setText(String.valueOf(c.getNotesCount()));
+                    GradientDrawable gd = (GradientDrawable) dot.getBackground().mutate();
+                    gd.setColor(ColorUtils.getCategoryColor(MainActivity.this, c.getColorIndex()));
+                    lock.setVisibility(c.isLocked() ? View.VISIBLE : View.GONE);
+                    hidden.setVisibility(c.isHiddenFromAll() ? View.VISIBLE : View.GONE);
 
-            boolean active = currentCategoryId == c.getId();
-            row.setBackgroundResource(active ? R.drawable.bg_drawer_item_selected : R.drawable.bg_ripple_rounded);
+                    boolean active = currentCategoryId == c.getId();
+                    row.setBackgroundResource(active ? R.drawable.bg_drawer_item_selected : R.drawable.bg_ripple_rounded);
 
-            row.setOnClickListener(v -> {
-                if (c.isLocked()) {
-                    requestUnlock(getString(R.string.main_category_protected), c.getName(), () -> selectFilter(c.getId(), 0));
-                } else {
-                    selectFilter(c.getId(), 0);
+                    row.setOnClickListener(v -> {
+                        if (c.isLocked()) {
+                            requestUnlock(getString(R.string.main_category_protected), c.getName(), () -> selectFilter(c.getId(), 0));
+                        } else {
+                            selectFilter(c.getId(), 0);
+                        }
+                    });
+                    drawerCatList.addView(row);
                 }
             });
-            drawerCatList.addView(row);
-        }
+        });
     }
 
     private void requestUnlock(String title, String subtitle, Runnable onSuccess) {
@@ -733,6 +805,13 @@ public class MainActivity extends AppCompatActivity {
         overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
     }
 
+    // Task 8: invalidateCountsCache
+    public void invalidateCountsCache() {
+        cachedCounts = null;
+        countsLastUpdated = 0;
+        countsLoadGeneration++;
+    }
+
     private void updateDrawerCounts() {
         final long now = System.currentTimeMillis();
         if (cachedCounts != null && (now - countsLastUpdated) < COUNTS_CACHE_TTL_MS) {
@@ -752,31 +831,43 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void applyCounts(NotesRepository.DashboardCounts counts) {
-        countAll.setText(String.valueOf(counts.allVisible));
-        countPinned.setText(String.valueOf(counts.pinned));
-        countFav.setText(String.valueOf(counts.favorites));
-        countCheck.setText(String.valueOf(counts.checklists));
-        countReminders.setText(String.valueOf(counts.reminders));
-        countAttachments.setText(String.valueOf(counts.attachments));
-        countArch.setText(String.valueOf(counts.archived));
-        countTrash.setText(String.valueOf(counts.trashed));
+        if (counts == null) return;
+        if (countAll != null) countAll.setText(String.valueOf(counts.allVisible));
+        if (countPinned != null) countPinned.setText(String.valueOf(counts.pinned));
+        if (countFav != null) countFav.setText(String.valueOf(counts.favorites));
+        if (countCheck != null) countCheck.setText(String.valueOf(counts.checklists));
+        if (countReminders != null) countReminders.setText(String.valueOf(counts.reminders));
+        if (countAttachments != null) countAttachments.setText(String.valueOf(counts.attachments));
+        if (countArch != null) countArch.setText(String.valueOf(counts.archived));
+        if (countTrash != null) countTrash.setText(String.valueOf(counts.trashed));
     }
 
     private void loadNotes() {
+        invalidateCountsCache();
         final int generation = ++notesLoadGeneration;
         final long categoryFilter = currentCategoryId;
         final int filter = currentFilter;
         final int sortMode = prefs.getSortMode();
         AppExecutors.getInstance().diskIO().execute(() -> {
-            final List<Note> notes = repo.getNotesForView(categoryFilter, filter, sortMode);
+            List<Note> notes;
+            try {
+                notes = repo.getNotesForView(categoryFilter, filter, sortMode);
+            } catch (Exception e) {
+                try { android.util.Log.e("MainActivity", "loadNotes query failed", e); } catch (Exception ignored) {}
+                notes = new ArrayList<>();
+            }
+            final List<Note> finalNotes = notes != null ? notes : new ArrayList<>();
             AppExecutors.getInstance().mainThread(() -> {
-                if (generation != notesLoadGeneration) return;
+                // Fix: on first launch adapter is empty, so we must show notes even if generation outdated
+                // to avoid blank screen. Only discard if adapter already has data and generation mismatched.
+                if (generation != notesLoadGeneration && adapter != null && adapter.getItemCount() > 0) return;
+                if (adapter == null) return;
                 adapter.setCategories(categoriesCache);
-                adapter.setData(notes);
+                adapter.setData(finalNotes);
 
-                boolean empty = notes.isEmpty();
-                emptyState.setVisibility(empty ? View.VISIBLE : View.GONE);
-                recycler.setVisibility(empty ? View.GONE : View.VISIBLE);
+                boolean empty = finalNotes.isEmpty();
+                if (emptyState != null) emptyState.setVisibility(empty ? View.VISIBLE : View.GONE);
+                if (recycler != null) recycler.setVisibility(empty ? View.GONE : View.VISIBLE);
 
                 applyEmptyState(categoryFilter, filter);
                 refreshAfterSwipe();
@@ -800,7 +891,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void applyEmptyState(long categoryFilter, int filter) {
         if (emptyDesc == null) return;
-        // Короткий заголовок убран — оставляем только подробное описание.
         if (categoryFilter > 0) {
             emptyDesc.setText(R.string.empty_category_notes_desc);
             return;
@@ -858,7 +948,6 @@ public class MainActivity extends AppCompatActivity {
             selDeleteBtn.setImageResource(inTrash ? R.drawable.ic_delete_forever_sheet : R.drawable.ic_delete);
         }
         
-        // Скрываем кнопки Закрепить, Цвет и Категория внутри Корзины (currentFilter == 5)
         View btnPin = findViewById(R.id.sel_pin);
         View btnColor = findViewById(R.id.sel_color);
         View btnCategory = findViewById(R.id.sel_category);
@@ -943,10 +1032,9 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // Обычный список: действие определяется настройкой swipeMode
         boolean rightSwipe = (direction == NotesAdapter.SwipeDirection.RIGHT);
         int swipeMode = prefs.getSwipeMode();
-        int action; // 0 = archive, 1 = trash, -1 = ничего
+        int action;
         switch (swipeMode) {
             case PrefsManager.SWIPE_MODE_OFF:
                 action = -1;
@@ -958,12 +1046,10 @@ public class MainActivity extends AppCompatActivity {
                 action = 1;
                 break;
             case PrefsManager.SWIPE_MODE_TRASH_ARCHIVE:
-                // "Корзина | Архив" — влево: корзина, вправо: архив
                 action = rightSwipe ? 0 : 1;
                 break;
             case PrefsManager.SWIPE_MODE_ARCHIVE_TRASH:
             default:
-                // "Архив | Корзина" — влево: архив, вправо: корзина (по умолч.)
                 action = rightSwipe ? 1 : 0;
                 break;
         }
@@ -992,10 +1078,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * Универсальный builder snackbar'а, привязанный к FAB (чтобы тот не закрывал текст).
-     * НЕ вызывает show() — позволяет добавлять setAction и т.п. Вызывайте .show() сами.
-     */
     private Snackbar snack(CharSequence text, int duration) {
         Snackbar bar = Snackbar.make(recycler, text, duration);
         if (fab != null) bar.setAnchorView(fab);
@@ -1035,6 +1117,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openEditor(long noteId, boolean preUnlocked) {
+        if (noteId > 0 && adapter != null) {
+            try {
+                for (Note n : adapter.getData()) {
+                    if (n != null && n.getId() == noteId) {
+                        EditNoteActivity.fastOpenCache = n;
+                        EditNoteActivity.fastOpenCacheId = noteId;
+                        break;
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
         Intent i = new Intent(this, EditNoteActivity.class);
         if (noteId > 0) i.putExtra("note_id", noteId);
         if (currentCategoryId > 0) i.putExtra("default_category_id", currentCategoryId);
@@ -1048,10 +1141,8 @@ public class MainActivity extends AppCompatActivity {
         overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
     }
 
-    /** Обрабатывает результат из EditNoteActivity: показывает snackbar с Undo. */
     private void handleEditorResult(String action, long noteId) {
         if (EditNoteActivity.ACTION_TRASHED.equals(action)) {
-            // Заметка уже в корзине — даём шанс восстановить
             loadNotes();
             showUndoSnackbar(getString(R.string.main_note_in_trash), () -> {
                 repo.restoreFromTrash(noteId);
@@ -1279,16 +1370,21 @@ public class MainActivity extends AppCompatActivity {
         none.setOnClickListener(view -> applyCategoryToSelection(0L, sheet, selected));
         list.addView(none);
 
-        for (Category c : repo.getAllCategories()) {
-            View row = inf.inflate(R.layout.item_category_pick, list, false);
-            ((TextView) row.findViewById(R.id.tv_name)).setText(c.getName());
-            View dot = row.findViewById(R.id.v_dot);
-            GradientDrawable gd = (GradientDrawable) dot.getBackground().mutate();
-            gd.setColor(ColorUtils.getCategoryColor(this, c.getColorIndex()));
-            row.findViewById(R.id.iv_check).setVisibility(View.INVISIBLE);
-            row.setOnClickListener(view -> applyCategoryToSelection(c.getId(), sheet, selected));
-            list.addView(row);
-        }
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            List<Category> cats = repo.getAllCategories();
+            AppExecutors.getInstance().mainThread(() -> {
+                for (Category c : cats) {
+                    View row = inf.inflate(R.layout.item_category_pick, list, false);
+                    ((TextView) row.findViewById(R.id.tv_name)).setText(c.getName());
+                    View dot = row.findViewById(R.id.v_dot);
+                    GradientDrawable gd = (GradientDrawable) dot.getBackground().mutate();
+                    gd.setColor(ColorUtils.getCategoryColor(this, c.getColorIndex()));
+                    row.findViewById(R.id.iv_check).setVisibility(View.INVISIBLE);
+                    row.setOnClickListener(view -> applyCategoryToSelection(c.getId(), sheet, selected));
+                    list.addView(row);
+                }
+            });
+        });
         sheet.show();
     }
 
@@ -1380,7 +1476,6 @@ public class MainActivity extends AppCompatActivity {
             selPinBtn.setImageResource(R.drawable.ic_pin_outline);
             return;
         }
-        // Теперь правильно переключаем иконку: закрашенная если все закреплены, иначе контурная
         selPinBtn.setImageResource(allPinned ? R.drawable.ic_pin : R.drawable.ic_pin_outline);
     }
 

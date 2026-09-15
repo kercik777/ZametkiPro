@@ -23,14 +23,6 @@ import java.util.List;
 
 /**
  * Редактор чек-листа.
- *
- * Возможности:
- *   • При отметке (checked) пункт автоматически уходит в конец списка
- *     (среди других checked сохраняется их относительный порядок).
- *   • При снятии отметки — возвращается в конец секции unchecked
- *     (т.е. встаёт перед первым checked).
- *   • Слева есть drag-handle (иконка): касание сразу запускает перетаскивание,
- *     без long-press.
  */
 public class ChecklistEditorAdapter extends RecyclerView.Adapter<ChecklistEditorAdapter.VH> {
 
@@ -55,16 +47,17 @@ public class ChecklistEditorAdapter extends RecyclerView.Adapter<ChecklistEditor
         notifyDataSetChanged();
     }
 
-    /** Привязывает adapter к ItemTouchHelper, чтобы handle мог стартовать drag. */
     public void attachItemTouchHelper(ItemTouchHelper helper) {
         this.itemTouchHelper = helper;
     }
 
     public void addNew() {
         if (readOnly) return;
-        // Новый пункт unchecked → встаёт в конец секции unchecked.
         int insertPos = firstCheckedIndex();
         if (insertPos < 0) insertPos = items.size();
+        // Clamp to valid range
+        if (insertPos < 0) insertPos = 0;
+        if (insertPos > items.size()) insertPos = items.size();
         items.add(insertPos, new ChecklistItem("", false));
         notifyItemInserted(insertPos);
         if (onChange != null) onChange.onChanged();
@@ -86,7 +79,10 @@ public class ChecklistEditorAdapter extends RecyclerView.Adapter<ChecklistEditor
 
     @Override
     public void onBindViewHolder(@NonNull VH h, int pos) {
-        ChecklistItem it = items.get(h.getBindingAdapterPosition() < 0 ? pos : h.getBindingAdapterPosition());
+        int adapterPos = h.getBindingAdapterPosition();
+        int usePos = adapterPos != RecyclerView.NO_POSITION ? adapterPos : pos;
+        if (usePos < 0 || usePos >= items.size()) return;
+        ChecklistItem it = items.get(usePos);
 
         if (h.watcher != null) h.et.removeTextChangedListener(h.watcher);
         h.et.setText(it.text);
@@ -102,13 +98,13 @@ public class ChecklistEditorAdapter extends RecyclerView.Adapter<ChecklistEditor
         h.et.setCursorVisible(!readOnly);
         h.et.setLongClickable(!readOnly);
         h.et.setTextIsSelectable(readOnly);
+        h.et.setEnabled(!readOnly);
 
-        // Чек-бокс
         h.iv.setOnClickListener(v -> {
             if (readOnly) return;
             HapticUtils.light(v);
             int p = h.getBindingAdapterPosition();
-            if (p == RecyclerView.NO_POSITION) return;
+            if (p == RecyclerView.NO_POSITION || p < 0 || p >= items.size()) return;
             ChecklistItem c = items.get(p);
             c.checked = !c.checked;
             updateCheck(h, c.checked);
@@ -119,33 +115,32 @@ public class ChecklistEditorAdapter extends RecyclerView.Adapter<ChecklistEditor
             if (c.checked && action == tkm.tmnote.pro.utils.PrefsManager.CHECKLIST_ACTION_DELETE) {
                 items.remove(p);
                 notifyItemRemoved(p);
+                if (p < items.size()) notifyItemRangeChanged(p, items.size() - p);
             } else if (action == tkm.tmnote.pro.utils.PrefsManager.CHECKLIST_ACTION_MOVE_TO_BOTTOM) {
-                // Авто-сортировка: checked → в конец, unchecked → перед первым checked
                 int target = computeTargetPositionAfterToggle(p, c.checked);
                 if (target != p && target >= 0 && target < items.size()) {
                     ChecklistItem moved = items.remove(p);
+                    // adjust target if after removal list shrank
+                    if (target > items.size()) target = items.size();
                     items.add(target, moved);
                     notifyItemMoved(p, target);
                 }
-            } else {
-                // Оставить на месте (или снят флаг при действии "Удалить") — ничего не меняем.
             }
 
             if (onChange != null) onChange.onChanged();
         });
 
-        // Удалить
         h.btnDelete.setOnClickListener(v -> {
             if (readOnly) return;
             HapticUtils.light(v);
             int p = h.getBindingAdapterPosition();
-            if (p == RecyclerView.NO_POSITION) return;
+            if (p == RecyclerView.NO_POSITION || p < 0 || p >= items.size()) return;
             items.remove(p);
             notifyItemRemoved(p);
+            if (p < items.size()) notifyItemRangeChanged(p, items.size() - p);
             if (onChange != null) onChange.onChanged();
         });
 
-        // Drag handle — запуск перетаскивания сразу при касании (без long-press)
         h.ivDrag.setOnTouchListener((v, event) -> {
             if (readOnly) return false;
             if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
@@ -163,7 +158,7 @@ public class ChecklistEditorAdapter extends RecyclerView.Adapter<ChecklistEditor
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
                 if (readOnly) return;
                 int p = h.getBindingAdapterPosition();
-                if (p == RecyclerView.NO_POSITION) return;
+                if (p == RecyclerView.NO_POSITION || p < 0 || p >= items.size()) return;
                 items.get(p).text = s.toString();
                 if (onChange != null) onChange.onChanged();
             }
@@ -172,32 +167,23 @@ public class ChecklistEditorAdapter extends RecyclerView.Adapter<ChecklistEditor
         h.et.addTextChangedListener(h.watcher);
     }
 
-    /**
-     * Вычисляет позицию, куда переехать пункту после смены состояния checked.
-     *
-     * @param p позиция в items, где пункт уже имеет новое состояние newChecked
-     */
     private int computeTargetPositionAfterToggle(int p, boolean newChecked) {
+        if (items.isEmpty()) return 0;
+        if (p < 0 || p >= items.size()) return items.size() - 1;
         if (newChecked) {
-            // checked → конец списка
             return items.size() - 1;
         }
-        // unchecked → перед первым checked (т.е. позиция = индекс первого checked,
-        // не считая нас самих)
         int firstChecked = -1;
         for (int i = 0; i < items.size(); i++) {
             if (i == p) continue;
             if (items.get(i).checked) { firstChecked = i; break; }
         }
         if (firstChecked < 0) {
-            // checked'ов больше нет — оставляем в конце
             return items.size() - 1;
         }
-        // Если firstChecked > p, после удаления нас всё сдвинется на 1 влево
         return firstChecked > p ? firstChecked - 1 : firstChecked;
     }
 
-    /** Перемещение в результате drag&drop. */
     public void onItemMove(int from, int to) {
         if (from < 0 || to < 0 || from >= items.size() || to >= items.size()) return;
         if (from == to) return;

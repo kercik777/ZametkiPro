@@ -28,15 +28,12 @@ import java.util.Set;
 
 /**
  * Адаптер вложений для редактора. GRID-режим с динамическим размером.
- * Click → открыть; Long-click → войти в selection mode / переключить выбор.
- * Поддерживается множественный выбор как в MainActivity/NotesAdapter.
+ * Исправлены утечки Glide, добавлен onViewRecycled, улучшен расчет размеров.
  */
 public class AttachmentsEditorAdapter extends RecyclerView.Adapter<AttachmentsEditorAdapter.VH> {
 
     public interface Callback {
-        /** Обычный клик (вне selection mode). */
         void onClick(Attachment a);
-        /** Долгое нажатие (после переключения selection в адаптере). */
         void onLongClick(Attachment a);
     }
 
@@ -48,19 +45,42 @@ public class AttachmentsEditorAdapter extends RecyclerView.Adapter<AttachmentsEd
     private List<Attachment> data;
     private final Callback cb;
     private int columns = 1;
+    private final float density;
 
-    // --- Selection ---
     private final Set<String> selectedKeys = new HashSet<>();
     private SelectionListener selectionListener;
+    private boolean readOnly = false;
+    private int cachedCardSize = -1;
+    private int cachedColumns = -1;
+    private int cachedTotalWidth = -1;
 
     public AttachmentsEditorAdapter(Context ctx, List<Attachment> data, Callback cb) {
-        this.ctx = ctx;
-        this.data = data;
+        this.ctx = ctx.getApplicationContext();
+        this.data = data != null ? data : new ArrayList<>();
         this.cb = cb;
+        this.density = ctx.getResources().getDisplayMetrics().density;
+    }
+
+    private int getCardSize(int columns) {
+        try {
+            DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
+            int totalWidth = dm.widthPixels - (int)(40 * density);
+            if (cachedCardSize > 0 && cachedColumns == columns && cachedTotalWidth == totalWidth) {
+                return cachedCardSize;
+            }
+            int gapPx = (int) (8 * density);
+            int size = (totalWidth - gapPx * (columns - 1)) / Math.max(columns, 1);
+            cachedCardSize = size;
+            cachedColumns = columns;
+            cachedTotalWidth = totalWidth;
+            return size;
+        } catch (Exception e) {
+            return (int)(100 * density);
+        }
     }
 
     public void setData(List<Attachment> d) {
-        this.data = d;
+        this.data = d != null ? d : new ArrayList<>();
         pruneSelection();
         notifyDataSetChanged();
     }
@@ -69,7 +89,6 @@ public class AttachmentsEditorAdapter extends RecyclerView.Adapter<AttachmentsEd
         this.columns = Math.max(1, Math.min(5, cols));
     }
 
-    // ===== Selection API =====
     public void setSelectionListener(SelectionListener l) { this.selectionListener = l; }
 
     public boolean isSelectionMode() { return !selectedKeys.isEmpty(); }
@@ -79,17 +98,19 @@ public class AttachmentsEditorAdapter extends RecyclerView.Adapter<AttachmentsEd
     public int getTotalCount() { return data == null ? 0 : data.size(); }
 
     public void toggleSelection(Attachment a) {
+        if (readOnly) return;
         String key = keyOf(a);
         if (key == null) return;
-        boolean had = selectedKeys.contains(key);
-        if (had) selectedKeys.remove(key);
+        if (selectedKeys.contains(key)) selectedKeys.remove(key);
         else selectedKeys.add(key);
         int idx = indexOf(a);
         if (idx >= 0) notifyItemChanged(idx);
+        else notifyDataSetChanged();
         notifySelectionChanged();
     }
 
     public void selectAll() {
+        if (readOnly) return;
         if (data == null) return;
         selectedKeys.clear();
         for (Attachment a : data) {
@@ -145,7 +166,6 @@ public class AttachmentsEditorAdapter extends RecyclerView.Adapter<AttachmentsEd
         return -1;
     }
 
-    /** Уникальный ключ для вложения. Предпочитаем fileName, иначе fallback. */
     private static String keyOf(Attachment a) {
         if (a == null) return null;
         if (!TextUtils.isEmpty(a.fileName)) return "f:" + a.fileName;
@@ -153,50 +173,52 @@ public class AttachmentsEditorAdapter extends RecyclerView.Adapter<AttachmentsEd
     }
 
     public void setReadOnly(boolean readOnly) {
+        if (this.readOnly == readOnly) return;
         this.readOnly = readOnly;
+        if (readOnly && !selectedKeys.isEmpty()) {
+            selectedKeys.clear();
+            notifySelectionChanged();
+        }
+        notifyDataSetChanged();
     }
-
-    private boolean readOnly = false;
 
     @NonNull
     @Override
     public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        return new VH(LayoutInflater.from(ctx).inflate(R.layout.item_attachment_grid, parent, false));
+        return new VH(LayoutInflater.from(parent.getContext()).inflate(R.layout.item_attachment_grid, parent, false));
     }
 
     @Override
     public void onBindViewHolder(@NonNull VH h, int pos) {
+        if (pos < 0 || pos >= data.size()) return;
         Attachment a = data.get(pos);
 
-        // Динамический размер карточки.
-        DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
-        int hPaddingPx = (int) (40 * dm.density);
-        int gapPx = (int) (8 * dm.density);
-        int totalWidth = dm.widthPixels - hPaddingPx;
-        int cardSize = (totalWidth - gapPx * (columns - 1)) / Math.max(columns, 1);
+        // Квадратные обложки как в оригинале, но с кэшем размера для скорости
+        int cardSize = getCardSize(columns);
         int height;
         if (columns == 1) {
-            height = (int) (200 * dm.density);
+            height = (int) (200 * density);
         } else {
             height = cardSize;
         }
 
         ViewGroup.LayoutParams lp = h.itemView.getLayoutParams();
-        if (lp instanceof ViewGroup.MarginLayoutParams) {
-            int margin = (int) (4 * dm.density);
-            ((ViewGroup.MarginLayoutParams) lp).setMargins(margin, margin, margin, margin);
+        if (lp != null) {
+            if (lp instanceof ViewGroup.MarginLayoutParams) {
+                int margin = (int) (4 * density);
+                ((ViewGroup.MarginLayoutParams) lp).setMargins(margin, margin, margin, margin);
+            }
+            lp.height = height;
+            h.itemView.setLayoutParams(lp);
         }
-        lp.height = height;
-        h.itemView.setLayoutParams(lp);
 
         h.tvName.setText(a.displayName == null ? a.fileName : a.displayName);
         h.tvSize.setText(AttachmentUtils.formatSize(a.size));
-        h.thumbIcon.setVisibility(View.VISIBLE);
+        h.thumbIcon.setVisibility(View.GONE);
         h.playOverlay.setVisibility(View.GONE);
         h.typeBadge.setVisibility(View.GONE);
         applyPlayOverlaySize(h);
 
-        // Всегда показываем имя и размер, но подгоняем размеры шрифтов под число колонок!
         h.tvName.setVisibility(View.VISIBLE);
         h.tvSize.setVisibility(View.VISIBLE);
         
@@ -211,7 +233,6 @@ public class AttachmentsEditorAdapter extends RecyclerView.Adapter<AttachmentsEd
             h.tvSize.setTextSize(10f);
         }
 
-        // Динамически уменьшаем внутренние отступы подписи для экономии места!
         View labelContainer = (View) h.tvName.getParent();
         if (labelContainer != null) {
             int pad = dp(columns >= 4 ? 3 : (columns == 3 ? 4 : 8));
@@ -225,70 +246,86 @@ public class AttachmentsEditorAdapter extends RecyclerView.Adapter<AttachmentsEd
                 h.thumb.setColorFilter(null);
                 h.thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
                 h.thumb.setPadding(0, 0, 0, 0);
-                h.thumbIcon.setVisibility(View.GONE);
                 File file = AttachmentUtils.getFile(ctx, a.fileName);
-                Glide.with(h.thumb)
-                        .load(file)
-                        .diskCacheStrategy(DiskCacheStrategy.ALL)
-                        .dontAnimate()
-                        .centerCrop()
-                        .error(R.drawable.ic_image)
-                        .into(h.thumb);
+                if (file == null || !file.exists()) {
+                    h.thumb.setImageResource(R.drawable.ic_image);
+                    break;
+                }
+                try {
+                    Glide.with(ctx)
+                            .load(file)
+                            .override(cardSize, cardSize)
+                            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                            .dontAnimate()
+                            .centerCrop()
+                            .error(R.drawable.ic_image)
+                            .into(h.thumb);
+                } catch (Exception e) {
+                    h.thumb.setImageResource(R.drawable.ic_image);
+                }
                 break;
             }
             case Attachment.TYPE_VIDEO: {
                 h.thumb.setColorFilter(null);
                 h.thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
                 h.thumb.setPadding(0, 0, 0, 0);
-                h.thumbIcon.setVisibility(View.GONE);
                 h.playOverlay.setVisibility(View.VISIBLE);
                 h.typeBadge.setVisibility(View.VISIBLE);
                 h.typeBadge.setText("VIDEO");
                 File file = AttachmentUtils.getFile(ctx, a.fileName);
-                Glide.with(h.thumb)
-                        .asBitmap()
-                        .load(file)
-                        .apply(new RequestOptions()
-                                .frame(1_000_000L)
-                                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                                .centerCrop())
-                        .dontAnimate()
-                        .error(R.drawable.ic_videocam)
-                        .into(h.thumb);
+                if (file == null || !file.exists()) {
+                    h.thumb.setImageResource(R.drawable.ic_videocam);
+                    break;
+                }
+                try {
+                    Glide.with(ctx)
+                            .asBitmap()
+                            .load(file)
+                            .override(cardSize, cardSize)
+                            .apply(new RequestOptions()
+                                    .frame(1_000_000L)
+                                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                                    .centerCrop())
+                            .dontAnimate()
+                            .error(R.drawable.ic_videocam)
+                            .into(h.thumb);
+                } catch (Exception e) {
+                    h.thumb.setImageResource(R.drawable.ic_videocam);
+                }
                 break;
             }
             case Attachment.TYPE_AUDIO:
-                Glide.with(h.thumb).clear(h.thumb);
+                try { Glide.with(ctx).clear(h.thumb); } catch (Exception ignored) {}
                 h.thumb.setImageDrawable(null);
                 h.thumb.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
                 h.thumb.setPadding(dp(24), dp(24), dp(24), dp(24));
                 h.thumb.setImageResource(R.drawable.ic_player_note);
-                h.thumb.setColorFilter(ctx.getResources().getColor(R.color.gold_primary));
-                h.thumbIcon.setVisibility(View.GONE);
+                try { h.thumb.setColorFilter(ctx.getResources().getColor(R.color.gold_primary)); } catch (Exception ignored) {}
                 h.typeBadge.setVisibility(View.VISIBLE);
                 h.typeBadge.setText("AUDIO");
                 break;
             default:
-                Glide.with(h.thumb).clear(h.thumb);
+                try { Glide.with(ctx).clear(h.thumb); } catch (Exception ignored) {}
                 h.thumb.setImageDrawable(null);
                 h.thumb.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
                 h.thumb.setPadding(dp(24), dp(24), dp(24), dp(24));
                 h.thumb.setImageResource(R.drawable.ic_file);
-                h.thumb.setColorFilter(ctx.getResources().getColor(R.color.gold_primary));
-                h.thumbIcon.setVisibility(View.GONE);
-                h.thumbIcon.setImageResource(R.drawable.ic_file);
+                try { h.thumb.setColorFilter(ctx.getResources().getColor(R.color.gold_primary)); } catch (Exception ignored) {}
                 h.typeBadge.setVisibility(View.VISIBLE);
                 String ext = "FILE";
                 if (a.fileName != null) {
                     int dot = a.fileName.lastIndexOf('.');
-                    if (dot > 0) ext = a.fileName.substring(dot + 1).toUpperCase();
+                    if (dot > 0 && dot < a.fileName.length() - 1) {
+                        ext = a.fileName.substring(dot + 1).toUpperCase();
+                        if (ext.length() > 6) ext = ext.substring(0, 6);
+                        ext = ext.replaceAll("[^A-Z0-9]", "");
+                        if (ext.isEmpty()) ext = "FILE";
+                    }
                 }
-                if (ext.length() > 6) ext = ext.substring(0, 6);
                 h.typeBadge.setText(ext);
                 break;
         }
 
-        // Визуал selection
         String key = keyOf(a);
         boolean isSelected = key != null && selectedKeys.contains(key);
         h.itemView.setActivated(isSelected);
@@ -307,16 +344,21 @@ public class AttachmentsEditorAdapter extends RecyclerView.Adapter<AttachmentsEd
         });
         h.itemView.setOnLongClickListener(v -> {
             if (readOnly) return true;
-            // Long-click переключает выбор (входит в режим, если был выключен)
             toggleSelection(a);
             if (cb != null) cb.onLongClick(a);
             return true;
         });
     }
 
+    @Override
+    public void onViewRecycled(@NonNull VH holder) {
+        super.onViewRecycled(holder);
+        try { Glide.with(ctx).clear(holder.thumb); } catch (Exception ignored) {}
+        holder.thumb.setImageDrawable(null);
+    }
 
     @Override
-    public int getItemCount() { return data.size(); }
+    public int getItemCount() { return data != null ? data.size() : 0; }
 
     private void applyBadgeStyle(VH h) {
         float sizeSp;
@@ -335,8 +377,10 @@ public class AttachmentsEditorAdapter extends RecyclerView.Adapter<AttachmentsEd
             hPad = dp(6);
             vPad = dp(2);
         }
-        h.typeBadge.setTextSize(sizeSp);
-        h.typeBadge.setPadding(hPad, vPad, hPad, vPad);
+        if (h.typeBadge != null) {
+            h.typeBadge.setTextSize(sizeSp);
+            h.typeBadge.setPadding(hPad, vPad, hPad, vPad);
+        }
     }
 
     private void applyPlayOverlaySize(VH h) {
@@ -358,18 +402,20 @@ public class AttachmentsEditorAdapter extends RecyclerView.Adapter<AttachmentsEd
             sizeDp = 56;
             padDp = 12;
         }
-        ViewGroup.LayoutParams lp = h.playOverlay.getLayoutParams();
-        if (lp != null) {
-            lp.width = dp(sizeDp);
-            lp.height = dp(sizeDp);
-            h.playOverlay.setLayoutParams(lp);
+        if (h.playOverlay != null) {
+            ViewGroup.LayoutParams lp = h.playOverlay.getLayoutParams();
+            if (lp != null) {
+                lp.width = dp(sizeDp);
+                lp.height = dp(sizeDp);
+                h.playOverlay.setLayoutParams(lp);
+            }
+            h.playOverlay.setPadding(dp(padDp), dp(padDp), dp(padDp), dp(padDp));
+            h.playOverlay.setAlpha(columns >= 4 ? 0.82f : 1f);
         }
-        h.playOverlay.setPadding(dp(padDp), dp(padDp), dp(padDp), dp(padDp));
-        h.playOverlay.setAlpha(columns >= 4 ? 0.82f : 1f);
     }
 
     private int dp(int value) {
-        return (int) (value * ctx.getResources().getDisplayMetrics().density);
+        return (int) (value * density);
     }
 
     static class VH extends RecyclerView.ViewHolder {

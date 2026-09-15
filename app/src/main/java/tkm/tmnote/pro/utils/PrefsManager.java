@@ -3,7 +3,11 @@ package tkm.tmnote.pro.utils;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import java.lang.reflect.Method;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 
 public class PrefsManager {
 
@@ -33,17 +37,15 @@ public class PrefsManager {
 
     // Действие при смахивании заметок (только для обычных фильтров)
     public static final int SWIPE_MODE_TRASH_ARCHIVE = 0;  // → вправо: Корзина | влево: Архив
-    public static final int SWIPE_MODE_ARCHIVE_TRANS = 1;  // (избыточно)
-    
-    // Действие с отмеченными элементами чек-листа
-    public static final int CHECKLIST_ACTION_MOVE_TO_BOTTOM = 0; // Помещать в конец списка
-    public static final int CHECKLIST_ACTION_LEAVE_PLACE = 1;    // Оставить на месте
-    public static final int CHECKLIST_ACTION_DELETE = 2;         // Удалить
-
     public static final int SWIPE_MODE_ARCHIVE_TRASH = 1;  // → вправо: Архив | влево: Корзина (по умолч.)
     public static final int SWIPE_MODE_ARCHIVE_ONLY  = 2;  // оба направления: Архив
     public static final int SWIPE_MODE_TRASH_ONLY    = 3;  // оба направления: Корзина
     public static final int SWIPE_MODE_OFF           = 4;  // выключено
+
+    // Действие с отмеченными элементами чек-листа
+    public static final int CHECKLIST_ACTION_MOVE_TO_BOTTOM = 0; // Помещать в конец списка
+    public static final int CHECKLIST_ACTION_LEAVE_PLACE = 1;    // Оставить на месте
+    public static final int CHECKLIST_ACTION_DELETE = 2;         // Удалить
 
     // Биты видимости пунктов меню (drawer) в MainActivity
     public static final int MENU_ITEM_PINNED    = 1;
@@ -62,7 +64,6 @@ public class PrefsManager {
     private static final String KEY_CONFIRM_DELETE = "confirm_delete";
     private static final String KEY_CONFIRM_SAVE_EXIT = "confirm_save_exit";
     private static final String KEY_SHOW_DATE = "show_date";
-    private static final String KEY_ACTIVE_LINKS = "active_links";
     private static final String KEY_EDITOR_READ_MODE = "editor_read_mode";
     private static final String KEY_DISGUISE_MODE = "disguise_mode";
     private static final String KEY_SORT_MODE = "sort_mode";
@@ -74,20 +75,137 @@ public class PrefsManager {
     private static final String KEY_PREVIEW_MAX_LINES = "preview_max_lines";
     private static final String KEY_ATTACHMENT_COLUMNS = "attachment_columns";
     private static final String KEY_DEFAULT_CATEGORIES_CREATED = "default_categories_created";
-    // TODO: Consider migrating to EncryptedSharedPreferences for stronger key protection
-    // See: https://developer.android.com/topic/security/data
     private static final String KEY_PASSWORD_HASH = "password_hash";
+    private static final String KEY_PASSWORD_SALT = "password_salt_v2";
     private static final String KEY_USE_BIOMETRIC = "use_biometric";
     private static final String KEY_LAST_UNLOCK = "last_unlock";
 
     private static final String KEY_AUTO_BACKUP_ENABLED = "auto_backup_enabled";
     private static final String KEY_AUTO_BACKUP_URI = "auto_backup_uri";
 
+    // Task 7: PBKDF2 constants
+    private static final int PBKDF2_ITERATIONS = 100000;
+    private static final int PBKDF2_KEY_LENGTH = 256; // bits
+    private static final String KEY_PASSWORD_HASH_VERSION = "password_hash_version";
+    private static final int HASH_VERSION_SHA256_SALTED = 1;
+    private static final int HASH_VERSION_PBKDF2 = 2;
+
     private final SharedPreferences prefs;
+    private final SharedPreferences securePrefs;
 
     public PrefsManager(Context ctx) {
-        prefs = ctx.getApplicationContext()
-                .getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        Context app = ctx.getApplicationContext();
+        prefs = app.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        SharedPreferences sec = null;
+        // Try to create EncryptedSharedPreferences via reflection, so project compiles even without androidx.security:security-crypto
+        try {
+            Class<?> masterKeyClass = Class.forName("androidx.security.crypto.MasterKey");
+            Class<?> builderClass = Class.forName("androidx.security.crypto.MasterKey$Builder");
+            Object builder = builderClass.getConstructor(Context.class).newInstance(app);
+            // MasterKey.KeyScheme.AES256_GCM
+            Class<?> keySchemeClass = Class.forName("androidx.security.crypto.MasterKey$KeyScheme");
+            Object aes256GcmScheme = null;
+            try {
+                aes256GcmScheme = keySchemeClass.getField("AES256_GCM").get(null);
+            } catch (Exception e) {
+                // fallback: try enum valueOf
+                try {
+                    Method valueOf = keySchemeClass.getMethod("valueOf", String.class);
+                    aes256GcmScheme = valueOf.invoke(null, "AES256_GCM");
+                } catch (Exception ignored) {}
+            }
+            if (aes256GcmScheme != null) {
+                try {
+                    builder = builderClass.getMethod("setKeyScheme", keySchemeClass).invoke(builder, aes256GcmScheme);
+                } catch (Exception ignored) {}
+            }
+            Object masterKey = builderClass.getMethod("build").invoke(builder);
+
+            Class<?> encPrefsClass = Class.forName("androidx.security.crypto.EncryptedSharedPreferences");
+            Class<?> keyEncClass = Class.forName("androidx.security.crypto.EncryptedSharedPreferences$PrefKeyEncryptionScheme");
+            Class<?> valueEncClass = Class.forName("androidx.security.crypto.EncryptedSharedPreferences$PrefValueEncryptionScheme");
+            Object keyEnc = keyEncClass.getField("AES256_SIV").get(null);
+            Object valueEnc = valueEncClass.getField("AES256_GCM").get(null);
+
+            Method createMethod = encPrefsClass.getMethod("create", Context.class, String.class, masterKeyClass, keyEncClass, valueEncClass);
+            Object created = createMethod.invoke(null, app, "secure_" + PREF_NAME, masterKey, keyEnc, valueEnc);
+            if (created instanceof SharedPreferences) {
+                sec = (SharedPreferences) created;
+            }
+        } catch (Throwable ignored) {
+            sec = null;
+        }
+        securePrefs = sec;
+    }
+
+    private SharedPreferences prefsForPassword() {
+        return securePrefs != null ? securePrefs : prefs;
+    }
+
+    private static String generateSalt() {
+        try {
+            SecureRandom sr = new SecureRandom();
+            byte[] b = new byte[16];
+            sr.nextBytes(b);
+            StringBuilder sb = new StringBuilder(32);
+            for (byte v : b) sb.append(String.format("%02x", v));
+            return sb.toString();
+        } catch (Exception e) {
+            return Long.toHexString(System.nanoTime()) + Long.toHexString(System.currentTimeMillis());
+        }
+    }
+
+    // Old method kept for migration
+    private static String hashWithSaltOld(String salt, String password) {
+        return sha256(salt + ":" + password);
+    }
+
+    private static String hashWithSalt(String salt, String password) {
+        // Task 7: new default is PBKDF2
+        String pbkdf2 = pbkdf2Hash(salt, password);
+        if (pbkdf2 != null) return pbkdf2;
+        // Fallback to old SHA256 if PBKDF2 unavailable
+        return hashWithSaltOld(salt, password);
+    }
+
+    private static String pbkdf2Hash(String saltHex, String password) {
+        try {
+            byte[] saltBytes = hexToBytes(saltHex);
+            if (saltBytes == null) {
+                // If salt is not hex (legacy), use its UTF-8 bytes
+                saltBytes = saltHex.getBytes("UTF-8");
+            }
+            PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), saltBytes, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH);
+            SecretKeyFactory skf = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            byte[] hash = skf.generateSecret(spec).getEncoded();
+            return bytesToHex(hash);
+        } catch (Exception e) {
+            try { android.util.Log.e("PrefsManager", "PBKDF2 failed, fallback to SHA256", e); } catch (Exception ignored) {}
+            return null;
+        }
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        if (bytes == null) return "";
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) sb.append(String.format("%02x", b & 0xff));
+        return sb.toString();
+    }
+
+    private static byte[] hexToBytes(String hex) {
+        if (hex == null) return null;
+        hex = hex.trim();
+        if (hex.length() % 2 != 0) return null;
+        try {
+            byte[] out = new byte[hex.length() / 2];
+            for (int i = 0; i < out.length; i++) {
+                int idx = i * 2;
+                out[i] = (byte) Integer.parseInt(hex.substring(idx, idx + 2), 16);
+            }
+            return out;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public boolean isOnboardingDone() { return prefs.getBoolean(KEY_ONBOARDING_DONE, false); }
@@ -115,8 +233,6 @@ public class PrefsManager {
     public boolean isShowDateEnabled() { return prefs.getBoolean(KEY_SHOW_DATE, true); }
     public void setShowDateEnabled(boolean v) { prefs.edit().putBoolean(KEY_SHOW_DATE, v).apply(); }
 
-    public boolean isActiveLinksEnabled() { return prefs.getBoolean(KEY_ACTIVE_LINKS, true); }
-    public void setActiveLinksEnabled(boolean v) { prefs.edit().putBoolean(KEY_ACTIVE_LINKS, v).apply(); }
 
     public boolean isEditorReadModeEnabled() { return prefs.getBoolean(KEY_EDITOR_READ_MODE, false); }
     public void setEditorReadModeEnabled(boolean v) { prefs.edit().putBoolean(KEY_EDITOR_READ_MODE, v).apply(); }
@@ -208,27 +324,127 @@ public class PrefsManager {
     public void setDefaultCategoriesCreated(boolean v) { prefs.edit().putBoolean(KEY_DEFAULT_CATEGORIES_CREATED, v).apply(); }
 
     // ===== Защита =====
-    public boolean hasPassword() { return prefs.getString(KEY_PASSWORD_HASH, null) != null; }
+    public boolean hasPassword() {
+        SharedPreferences pp = prefsForPassword();
+        if (pp.contains(KEY_PASSWORD_HASH)) return true;
+        // fallback for legacy storage
+        return prefs.getString(KEY_PASSWORD_HASH, null) != null;
+    }
 
     public void setPassword(String password) {
+        SharedPreferences pp = prefsForPassword();
         if (password == null || password.isEmpty()) {
-            prefs.edit().remove(KEY_PASSWORD_HASH).apply();
+            pp.edit().remove(KEY_PASSWORD_HASH).remove(KEY_PASSWORD_SALT).remove(KEY_PASSWORD_HASH_VERSION).apply();
+            // also clear legacy
+            prefs.edit().remove(KEY_PASSWORD_HASH).remove(KEY_PASSWORD_SALT).remove(KEY_PASSWORD_HASH_VERSION).apply();
         } else {
-            prefs.edit().putString(KEY_PASSWORD_HASH, sha256(password)).apply();
+            String salt = generateSalt();
+            String hash = hashWithSalt(salt, password); // PBKDF2 now
+            pp.edit().putString(KEY_PASSWORD_SALT, salt).putString(KEY_PASSWORD_HASH, hash)
+                    .putInt(KEY_PASSWORD_HASH_VERSION, HASH_VERSION_PBKDF2).apply();
+            // clear legacy plain hash to avoid confusion
+            prefs.edit().remove(KEY_PASSWORD_HASH).remove(KEY_PASSWORD_SALT).remove(KEY_PASSWORD_HASH_VERSION).apply();
         }
     }
 
     public boolean setPasswordSync(String password) {
+        SharedPreferences pp = prefsForPassword();
         if (password == null || password.isEmpty()) {
-            return prefs.edit().remove(KEY_PASSWORD_HASH).commit();
+            boolean a = pp.edit().remove(KEY_PASSWORD_HASH).remove(KEY_PASSWORD_SALT).remove(KEY_PASSWORD_HASH_VERSION).commit();
+            boolean b = prefs.edit().remove(KEY_PASSWORD_HASH).remove(KEY_PASSWORD_SALT).remove(KEY_PASSWORD_HASH_VERSION).commit();
+            return a && b;
         }
-        return prefs.edit().putString(KEY_PASSWORD_HASH, sha256(password)).commit();
+        String salt = generateSalt();
+        String hash = hashWithSalt(salt, password);
+        boolean ok = pp.edit().putString(KEY_PASSWORD_SALT, salt).putString(KEY_PASSWORD_HASH, hash)
+                .putInt(KEY_PASSWORD_HASH_VERSION, HASH_VERSION_PBKDF2).commit();
+        prefs.edit().remove(KEY_PASSWORD_HASH).remove(KEY_PASSWORD_SALT).remove(KEY_PASSWORD_HASH_VERSION).commit();
+        return ok;
     }
 
     public boolean checkPassword(String password) {
-        String hash = prefs.getString(KEY_PASSWORD_HASH, null);
-        if (hash == null) return true;
-        return hash.equals(sha256(password));
+        if (password == null) password = "";
+        SharedPreferences pp = prefsForPassword();
+        String salt = pp.getString(KEY_PASSWORD_SALT, null);
+        String hash = pp.getString(KEY_PASSWORD_HASH, null);
+        int version = pp.getInt(KEY_PASSWORD_HASH_VERSION, 0);
+
+        // Try secure storage first
+        if (hash != null) {
+            if (salt != null) {
+                // Try PBKDF2 first (new)
+                String pbkdf2 = pbkdf2Hash(salt, password);
+                if (pbkdf2 != null && pbkdf2.equals(hash)) {
+                    return true;
+                }
+                // Try old salted SHA256 for migration
+                if (hash.equals(hashWithSaltOld(salt, password))) {
+                    // Migrate to PBKDF2
+                    String newSalt = generateSalt();
+                    String newHash = pbkdf2Hash(newSalt, password);
+                    if (newHash == null) newHash = hashWithSaltOld(newSalt, password);
+                    pp.edit().putString(KEY_PASSWORD_SALT, newSalt).putString(KEY_PASSWORD_HASH, newHash)
+                            .putInt(KEY_PASSWORD_HASH_VERSION, HASH_VERSION_PBKDF2).apply();
+                    return true;
+                }
+                // Also try if stored version indicates PBKDF2 but our pbkdf2 calc returned null (fallback)
+                if (version == HASH_VERSION_PBKDF2) {
+                    // Already tried PBKDF2, fail
+                    return false;
+                }
+                // Fallback to generic hashWithSalt (which itself tries PBKDF2)
+                return hash.equals(hashWithSalt(salt, password));
+            } else {
+                // legacy salt-less hash inside secure prefs
+                if (hash.equals(sha256(password))) {
+                    // migrate to PBKDF2 salted
+                    String newSalt = generateSalt();
+                    String newHash = pbkdf2Hash(newSalt, password);
+                    if (newHash == null) newHash = hashWithSaltOld(newSalt, password);
+                    pp.edit().putString(KEY_PASSWORD_SALT, newSalt).putString(KEY_PASSWORD_HASH, newHash)
+                            .putInt(KEY_PASSWORD_HASH_VERSION, HASH_VERSION_PBKDF2).apply();
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        // Fallback: old plain prefs storage
+        String legacyHash = prefs.getString(KEY_PASSWORD_HASH, null);
+        if (legacyHash == null) return true; // no password set
+        // Try PBKDF2 with legacy salt if present
+        String legacySalt = prefs.getString(KEY_PASSWORD_SALT, null);
+        int legacyVersion = prefs.getInt(KEY_PASSWORD_HASH_VERSION, 0);
+        if (legacySalt != null) {
+            String pbkdf2 = pbkdf2Hash(legacySalt, password);
+            if (pbkdf2 != null && pbkdf2.equals(legacyHash)) {
+                // Migrate to secure
+                pp.edit().putString(KEY_PASSWORD_SALT, legacySalt).putString(KEY_PASSWORD_HASH, legacyHash)
+                        .putInt(KEY_PASSWORD_HASH_VERSION, HASH_VERSION_PBKDF2).apply();
+                prefs.edit().remove(KEY_PASSWORD_HASH).remove(KEY_PASSWORD_SALT).remove(KEY_PASSWORD_HASH_VERSION).apply();
+                return true;
+            }
+            if (legacyHash.equals(hashWithSaltOld(legacySalt, password))) {
+                String newSalt = generateSalt();
+                String newHash = pbkdf2Hash(newSalt, password);
+                if (newHash == null) newHash = hashWithSaltOld(newSalt, password);
+                pp.edit().putString(KEY_PASSWORD_SALT, newSalt).putString(KEY_PASSWORD_HASH, newHash)
+                        .putInt(KEY_PASSWORD_HASH_VERSION, HASH_VERSION_PBKDF2).apply();
+                prefs.edit().remove(KEY_PASSWORD_HASH).remove(KEY_PASSWORD_SALT).remove(KEY_PASSWORD_HASH_VERSION).apply();
+                return true;
+            }
+        }
+        if (legacyHash.equals(sha256(password))) {
+            // migrate legacy to secure + PBKDF2
+            String newSalt = generateSalt();
+            String newHash = pbkdf2Hash(newSalt, password);
+            if (newHash == null) newHash = hashWithSaltOld(newSalt, password);
+            pp.edit().putString(KEY_PASSWORD_SALT, newSalt).putString(KEY_PASSWORD_HASH, newHash)
+                    .putInt(KEY_PASSWORD_HASH_VERSION, HASH_VERSION_PBKDF2).apply();
+            prefs.edit().remove(KEY_PASSWORD_HASH).remove(KEY_PASSWORD_SALT).remove(KEY_PASSWORD_HASH_VERSION).apply();
+            return true;
+        }
+        return false;
     }
 
     public boolean isBiometricEnabled() { return prefs.getBoolean(KEY_USE_BIOMETRIC, true); }
@@ -246,10 +462,18 @@ public class PrefsManager {
 
     public void clearAll() {
         prefs.edit().clear().apply();
+        if (securePrefs != null) {
+            try { securePrefs.edit().clear().apply(); } catch (Exception ignored) {}
+        }
     }
 
     public boolean clearAllSync() {
-        return prefs.edit().clear().commit();
+        boolean a = prefs.edit().clear().commit();
+        boolean b = true;
+        if (securePrefs != null) {
+            try { b = securePrefs.edit().clear().commit(); } catch (Exception ignored) { b = true; }
+        }
+        return a && b;
     }
 
     private static String sha256(String s) {

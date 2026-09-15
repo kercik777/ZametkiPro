@@ -18,6 +18,7 @@ import java.util.Set;
 public class AttachmentUtils {
 
     public static final String ATT_DIR = "attachments";
+    private static final java.security.SecureRandom SECURE_RANDOM = new java.security.SecureRandom();
 
     /** Возвращает корневой каталог вложений. */
     public static File getAttachmentsRoot(Context ctx) {
@@ -27,18 +28,21 @@ public class AttachmentUtils {
     }
 
 
-    /** Создаёт уникальное имя файла. */
+    /** Создаёт уникальное имя файла. Использует SecureRandom чтобы избежать коллизий. */
     public static String generateFileName(String original) {
         long ts = System.currentTimeMillis();
-        int rnd = (int) (Math.random() * 10000);
+        int rnd = SECURE_RANDOM.nextInt(100000);
         String ext = "";
         if (original != null) {
             int dot = original.lastIndexOf('.');
             if (dot > 0 && dot < original.length() - 1) {
                 ext = original.substring(dot);
+                // sanitize extension: allow only alphanumeric and dot, max 10 chars
+                if (ext.length() > 12) ext = ext.substring(0, 12);
+                ext = ext.replaceAll("[^A-Za-z0-9._-]", "");
             }
         }
-        return ts + "_" + rnd + ext;
+        return ts + "_" + rnd + "_" + SECURE_RANDOM.nextInt(1000) + ext;
     }
 
     /** Подбирает тип вложения по MIME / расширению. */

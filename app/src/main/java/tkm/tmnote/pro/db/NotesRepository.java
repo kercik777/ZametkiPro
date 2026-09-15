@@ -25,20 +25,18 @@ public class NotesRepository {
         public int attachments;
     }
 
-    private final DbHelper helper;
     private final Context ctx;
 
     public NotesRepository(Context ctx) {
         this.ctx = ctx.getApplicationContext();
-        this.helper = DbHelper.getInstance(this.ctx);
     }
 
     private SQLiteDatabase db() {
-        return helper.getWritableDatabase();
+        return DbHelper.getInstance(ctx).getWritableDatabase();
     }
 
     private SQLiteDatabase rdb() {
-        return helper.getReadableDatabase();
+        return DbHelper.getInstance(ctx).getReadableDatabase();
     }
 
     // ===== Заметки =====
@@ -142,7 +140,7 @@ public class NotesRepository {
                     new String[]{String.valueOf(DbHelper.STATUS_TRASHED)},
                     null, null, null);
             NoteCursorIndices idx = c != null ? new NoteCursorIndices(c) : null;
-            while (c.moveToNext()) {
+            while (c != null && c.moveToNext()) {
                 Note n = fromCursor(c, idx);
                 for (tkm.tmnote.pro.models.Attachment a : n.getAttachments()) {
                     if (a.fileName != null) fileNames.add(a.fileName);
@@ -151,14 +149,14 @@ public class NotesRepository {
         } finally {
             if (c != null) c.close();
         }
-        SQLiteDatabase db = db();
-        db.beginTransaction();
+        SQLiteDatabase database = db();
+        database.beginTransaction();
         try {
-            db.delete(DbHelper.T_NOTES, DbHelper.C_STATUS + "=?",
+            database.delete(DbHelper.T_NOTES, DbHelper.C_STATUS + "=?",
                     new String[]{String.valueOf(DbHelper.STATUS_TRASHED)});
-            db.setTransactionSuccessful();
+            database.setTransactionSuccessful();
         } finally {
-            db.endTransaction();
+            database.endTransaction();
         }
         return fileNames;
     }
@@ -171,8 +169,7 @@ public class NotesRepository {
             String selection = DbHelper.C_STATUS + "=? AND (" +
                     "(" + DbHelper.C_DELETED + ">0 AND " + DbHelper.C_DELETED + "<=?) OR " +
                     "((" + DbHelper.C_DELETED + "<=0 OR " + DbHelper.C_DELETED + " IS NULL) AND " + DbHelper.C_UPDATED + "<=?) OR " +
-                    "((" + DbHelper.C_DELETED + "<=0 OR " + DbHelper.C_DELETED + " IS NULL) AND " + DbHelper.C_CREATED + "<=?)" +
-                    ")";
+                    "((" + DbHelper.C_DELETED + "<=0 OR " + DbHelper.C_DELETED + " IS NULL) AND " + DbHelper.C_CREATED + "<=?) )";
             String[] selectionArgs = new String[]{
                     String.valueOf(DbHelper.STATUS_TRASHED),
                     String.valueOf(cutoffTimeMs),
@@ -181,7 +178,7 @@ public class NotesRepository {
             };
             c = rdb().query(DbHelper.T_NOTES, null, selection, selectionArgs, null, null, null);
             NoteCursorIndices idx = c != null ? new NoteCursorIndices(c) : null;
-            while (c.moveToNext()) {
+            while (c != null && c.moveToNext()) {
                 Note n = fromCursor(c, idx);
                 ids.add(n.getId());
                 if (outFileNames != null) {
@@ -194,16 +191,16 @@ public class NotesRepository {
             if (c != null) c.close();
         }
         if (ids.isEmpty()) return 0;
-        SQLiteDatabase db = db();
-        db.beginTransaction();
+        SQLiteDatabase database = db();
+        database.beginTransaction();
         try {
             for (Long id : ids) {
-                db.delete(DbHelper.T_NOTES, DbHelper.C_ID + "=?",
+                database.delete(DbHelper.T_NOTES, DbHelper.C_ID + "=?",
                         new String[]{String.valueOf(id)});
             }
-            db.setTransactionSuccessful();
+            database.setTransactionSuccessful();
         } finally {
-            db.endTransaction();
+            database.endTransaction();
         }
         return ids.size();
     }
@@ -224,27 +221,28 @@ public class NotesRepository {
 
     public void setCategoryForNotes(List<Long> ids, long categoryId) {
         if (ids == null || ids.isEmpty()) return;
-        SQLiteDatabase db = db();
-        db.beginTransaction();
+        SQLiteDatabase database = db();
+        database.beginTransaction();
         try {
             ContentValues cv = new ContentValues();
             cv.put(DbHelper.C_CATEGORY_ID, categoryId);
             for (Long id : ids) {
-                db.update(DbHelper.T_NOTES, cv, DbHelper.C_ID + "=?",
+                database.update(DbHelper.T_NOTES, cv, DbHelper.C_ID + "=?",
                         new String[]{String.valueOf(id)});
             }
-            db.setTransactionSuccessful();
+            database.setTransactionSuccessful();
         } finally {
-            db.endTransaction();
+            database.endTransaction();
         }
     }
 
     public Note getNoteById(long id) {
+        if (id <= 0) return null;
         Cursor c = null;
         try {
             c = rdb().query(DbHelper.T_NOTES, null, DbHelper.C_ID + "=?",
                     new String[]{String.valueOf(id)}, null, null, null);
-            if (c.moveToFirst()) return fromCursor(c, new NoteCursorIndices(c));
+            if (c != null && c.moveToFirst()) return fromCursor(c, new NoteCursorIndices(c));
             return null;
         } finally {
             if (c != null) c.close();
@@ -298,10 +296,11 @@ public class NotesRepository {
 
             if (searchQuery != null && !searchQuery.trim().isEmpty()) {
                 where.append(" AND (")
-                        .append(DbHelper.C_TITLE).append(" LIKE ? OR ")
-                        .append(DbHelper.C_CONTENT).append(" LIKE ? OR ")
-                        .append(DbHelper.C_CHECKLIST).append(" LIKE ?)");
-                String pat = "%" + searchQuery.trim() + "%";
+                        .append(DbHelper.C_TITLE).append(" LIKE ? ESCAPE '\\' OR ")
+                        .append(DbHelper.C_CONTENT).append(" LIKE ? ESCAPE '\\' OR ")
+                        .append(DbHelper.C_CHECKLIST).append(" LIKE ? ESCAPE '\\')");
+                String escaped = escapeLike(searchQuery.trim());
+                String pat = "%" + escaped + "%";
                 args.add(pat);
                 args.add(pat);
                 args.add(pat);
@@ -334,11 +333,17 @@ public class NotesRepository {
                     args.toArray(new String[0]), null, null, orderBy);
             result = new ArrayList<>(c != null ? Math.max(c.getCount(), 0) : 0);
             NoteCursorIndices idx = c != null ? new NoteCursorIndices(c) : null;
-            while (c.moveToNext()) result.add(fromCursor(c, idx));
+            while (c != null && c.moveToNext()) result.add(fromCursor(c, idx));
             return result;
         } finally {
             if (c != null) c.close();
         }
+    }
+
+    private static String escapeLike(String s) {
+        return s.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     public DashboardCounts getDashboardCounts() {
@@ -361,7 +366,7 @@ public class NotesRepository {
                     "SUM(CASE WHEN (" + DbHelper.C_ATTACHMENTS + " IS NOT NULL AND " + DbHelper.C_ATTACHMENTS + " != '[]' AND " + DbHelper.C_ATTACHMENTS + " != '') AND " + visibleCond + " THEN 1 ELSE 0 END) " +
                     "FROM " + DbHelper.T_NOTES;
             c = rdb().rawQuery(sql, null);
-            if (c.moveToFirst()) {
+            if (c != null && c.moveToFirst()) {
                 counts.allVisible = c.getInt(0);
                 counts.pinned = c.getInt(1);
                 counts.favorites = c.getInt(2);
@@ -406,7 +411,7 @@ public class NotesRepository {
                     DbHelper.C_CATEGORY_ID + " NOT IN (SELECT " + DbHelper.C_ID +
                     " FROM " + DbHelper.T_CATEGORIES + " WHERE " + DbHelper.C_CAT_HIDDEN + "=1))";
             c = rdb().rawQuery(q, null);
-            if (c.moveToFirst()) return c.getInt(0);
+            if (c != null && c.moveToFirst()) return c.getInt(0);
             return 0;
         } finally {
             if (c != null) c.close();
@@ -418,7 +423,7 @@ public class NotesRepository {
         try {
             c = rdb().rawQuery("SELECT COUNT(*) FROM " + DbHelper.T_NOTES +
                     " WHERE " + where, null);
-            if (c.moveToFirst()) return c.getInt(0);
+            if (c != null && c.moveToFirst()) return c.getInt(0);
             return 0;
         } finally {
             if (c != null) c.close();
@@ -434,7 +439,7 @@ public class NotesRepository {
                     new String[]{String.valueOf(DbHelper.STATUS_TRASHED)}, null, null, null);
             all = new ArrayList<>(c != null ? Math.max(c.getCount(), 0) : 0);
             NoteCursorIndices idx = c != null ? new NoteCursorIndices(c) : null;
-            while (c.moveToNext()) all.add(fromCursor(c, idx));
+            while (c != null && c.moveToNext()) all.add(fromCursor(c, idx));
             return all;
         } finally {
             if (c != null) c.close();
@@ -448,7 +453,7 @@ public class NotesRepository {
             c = rdb().query(DbHelper.T_NOTES, null, null, null, null, null, null);
             all = new ArrayList<>(c != null ? Math.max(c.getCount(), 0) : 0);
             NoteCursorIndices idx = c != null ? new NoteCursorIndices(c) : null;
-            while (c.moveToNext()) all.add(fromCursor(c, idx));
+            while (c != null && c.moveToNext()) all.add(fromCursor(c, idx));
             return all;
         } finally {
             if (c != null) c.close();
@@ -464,7 +469,7 @@ public class NotesRepository {
                     null, null, null, null);
             all = new ArrayList<>(c != null ? Math.max(c.getCount(), 0) : 0);
             NoteCursorIndices idx = c != null ? new NoteCursorIndices(c) : null;
-            while (c.moveToNext()) all.add(fromCursor(c, idx));
+            while (c != null && c.moveToNext()) all.add(fromCursor(c, idx));
             return all;
         } finally {
             if (c != null) c.close();
@@ -478,7 +483,7 @@ public class NotesRepository {
                     " WHERE " + DbHelper.C_CATEGORY_ID + "=? AND " +
                     DbHelper.C_STATUS + "=" + DbHelper.STATUS_ACTIVE,
                     new String[]{String.valueOf(categoryId)});
-            if (c.moveToFirst()) return c.getInt(0);
+            if (c != null && c.moveToFirst()) return c.getInt(0);
             return 0;
         } finally {
             if (c != null) c.close();
@@ -498,7 +503,7 @@ public class NotesRepository {
             list = new ArrayList<>(c != null ? Math.max(c.getCount(), 0) : 0);
             CategoryCursorIndices idx = c != null ? new CategoryCursorIndices(c) : null;
             int countIdx = c != null ? c.getColumnIndex("note_count") : -1;
-            while (c.moveToNext()) {
+            while (c != null && c.moveToNext()) {
                 Category category = catFromCursor(c, idx);
                 if (countIdx >= 0) category.setNotesCount(c.getInt(countIdx));
                 list.add(category);
@@ -514,14 +519,14 @@ public class NotesRepository {
      * Используется при импорте полного бекапа и при "Удалить всё" в настройках.
      */
     public void clearAllNotes() {
-        SQLiteDatabase db = db();
-        db.beginTransaction();
+        SQLiteDatabase database = db();
+        database.beginTransaction();
         try {
-            db.delete(DbHelper.T_NOTES, null, null);
-            db.delete(DbHelper.T_CATEGORIES, null, null);
-            db.setTransactionSuccessful();
+            database.delete(DbHelper.T_NOTES, null, null);
+            database.delete(DbHelper.T_CATEGORIES, null, null);
+            database.setTransactionSuccessful();
         } finally {
-            db.endTransaction();
+            database.endTransaction();
         }
     }
 
@@ -562,12 +567,19 @@ public class NotesRepository {
     }
 
     public void deleteCategory(long id) {
-        ContentValues cv = new ContentValues();
-        cv.put(DbHelper.C_CATEGORY_ID, 0L);
-        db().update(DbHelper.T_NOTES, cv, DbHelper.C_CATEGORY_ID + "=?",
-                new String[]{String.valueOf(id)});
-        db().delete(DbHelper.T_CATEGORIES, DbHelper.C_ID + "=?",
-                new String[]{String.valueOf(id)});
+        SQLiteDatabase database = db();
+        database.beginTransaction();
+        try {
+            ContentValues cv = new ContentValues();
+            cv.put(DbHelper.C_CATEGORY_ID, 0L);
+            database.update(DbHelper.T_NOTES, cv, DbHelper.C_CATEGORY_ID + "=?",
+                    new String[]{String.valueOf(id)});
+            database.delete(DbHelper.T_CATEGORIES, DbHelper.C_ID + "=?",
+                    new String[]{String.valueOf(id)});
+            database.setTransactionSuccessful();
+        } finally {
+            database.endTransaction();
+        }
     }
 
     public List<Category> getAllCategories() {
@@ -578,7 +590,7 @@ public class NotesRepository {
                     DbHelper.C_CAT_SORT + " ASC, " + DbHelper.C_CAT_NAME + " COLLATE NOCASE ASC");
             list = new ArrayList<>(c != null ? Math.max(c.getCount(), 0) : 0);
             CategoryCursorIndices idx = c != null ? new CategoryCursorIndices(c) : null;
-            while (c.moveToNext()) list.add(catFromCursor(c, idx));
+            while (c != null && c.moveToNext()) list.add(catFromCursor(c, idx));
             return list;
         } finally {
             if (c != null) c.close();
@@ -591,7 +603,7 @@ public class NotesRepository {
         try {
             c = rdb().query(DbHelper.T_CATEGORIES, null, DbHelper.C_ID + "=?",
                     new String[]{String.valueOf(id)}, null, null, null);
-            if (c.moveToFirst()) return catFromCursor(c, new CategoryCursorIndices(c));
+            if (c != null && c.moveToFirst()) return catFromCursor(c, new CategoryCursorIndices(c));
             return null;
         } finally {
             if (c != null) c.close();
@@ -602,7 +614,7 @@ public class NotesRepository {
         Cursor c = null;
         try {
             c = rdb().rawQuery("SELECT COUNT(*) FROM " + DbHelper.T_CATEGORIES, null);
-            if (c.moveToFirst()) return c.getInt(0);
+            if (c != null && c.moveToFirst()) return c.getInt(0);
             return 0;
         } finally {
             if (c != null) c.close();
@@ -747,4 +759,3 @@ public class NotesRepository {
         }
     }
 }
-

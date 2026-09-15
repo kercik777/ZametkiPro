@@ -99,8 +99,17 @@ public class VideoPlayerActivity extends AppCompatActivity implements SurfaceHol
         setContentView(R.layout.activity_video_player);
         tkm.tmnote.pro.utils.SystemBarsHelper.apply(this);
 
-        // Получаем список видео
-        List<Attachment> list = (List<Attachment>) getIntent().getSerializableExtra("videos");
+        // Получаем список видео — через Parcelable
+        ArrayList<Attachment> list = null;
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                list = getIntent().getParcelableArrayListExtra("videos", Attachment.class);
+            } else {
+                list = getIntent().getParcelableArrayListExtra("videos");
+            }
+        } catch (Exception e) {
+            list = null;
+        }
         currentPosition = getIntent().getIntExtra("index", 0);
         noteId = getIntent().getLongExtra("note_id", 0L);
         repo = new NotesRepository(this);

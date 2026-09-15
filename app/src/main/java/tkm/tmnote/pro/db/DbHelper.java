@@ -43,19 +43,27 @@ public class DbHelper extends SQLiteOpenHelper {
     public static final int STATUS_ARCHIVED = 1;
     public static final int STATUS_TRASHED = 2;
 
-    private static DbHelper instance;
+    private static volatile DbHelper instance;
 
-    public static synchronized DbHelper getInstance(Context ctx) {
-        if (instance == null) {
-            instance = new DbHelper(ctx.getApplicationContext());
+    public static DbHelper getInstance(Context ctx) {
+        DbHelper local = instance;
+        if (local == null) {
+            synchronized (DbHelper.class) {
+                local = instance;
+                if (local == null) {
+                    instance = local = new DbHelper(ctx.getApplicationContext());
+                }
+            }
         }
-        return instance;
+        return local;
     }
 
-    public static synchronized void resetInstance() {
-        if (instance != null) {
-            try { instance.close(); } catch (Exception ignored) {}
-            instance = null;
+    public static void resetInstance() {
+        synchronized (DbHelper.class) {
+            if (instance != null) {
+                try { instance.close(); } catch (Exception ignored) {}
+                instance = null;
+            }
         }
     }
 

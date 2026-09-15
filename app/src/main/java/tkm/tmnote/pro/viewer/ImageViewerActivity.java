@@ -78,8 +78,17 @@ public class ImageViewerActivity extends AppCompatActivity {
         setContentView(R.layout.activity_image_viewer);
         tkm.tmnote.pro.utils.SystemBarsHelper.apply(this);
 
-        // Получаем список вложений и стартовый индекс
-        List<Attachment> list = (List<Attachment>) getIntent().getSerializableExtra("images");
+        // Получаем список вложений и стартовый индекс — через Parcelable
+        ArrayList<Attachment> list = null;
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                list = getIntent().getParcelableArrayListExtra("images", Attachment.class);
+            } else {
+                list = getIntent().getParcelableArrayListExtra("images");
+            }
+        } catch (Exception e) {
+            list = null;
+        }
         currentPosition = getIntent().getIntExtra("index", 0);
         noteId = getIntent().getLongExtra("note_id", 0L);
         repo = new NotesRepository(this);
@@ -143,19 +152,25 @@ public class ImageViewerActivity extends AppCompatActivity {
             public void onPageSelected(int position) {
                 currentPosition = position;
                 
-                // Сбрасываем зум предыдущей картинки
+                // Сбрасываем зум предыдущей картинки и разблокируем свайп
                 if (activeZoomListener != null) {
-                    activeZoomListener.reset();
+                    try { activeZoomListener.reset(); } catch (Exception ignored) {}
+                    activeZoomListener = null;
+                }
+                if (viewPager != null) {
+                    try { viewPager.setUserInputEnabled(true); } catch (Exception ignored) {}
                 }
 
                 // Устанавливаем заголовок активного изображения
-                Attachment a = imageAttachments.get(position);
-                tvName.setText(a.displayName == null ? a.fileName : a.displayName);
+                if (position >= 0 && position < imageAttachments.size()) {
+                    Attachment a = imageAttachments.get(position);
+                    if (tvName != null) tvName.setText(a.displayName == null ? a.fileName : a.displayName);
+                }
 
                 // Синхронизируем ленту миниатюр снизу
                 if (thumbAdapter != null) {
                     thumbAdapter.setActivePosition(position);
-                    rvThumbnails.smoothScrollToPosition(position);
+                    if (rvThumbnails != null) rvThumbnails.smoothScrollToPosition(position);
                 }
 
                 // Продлеваем отображение панелей при активном свайпе
@@ -228,6 +243,13 @@ public class ImageViewerActivity extends AppCompatActivity {
 
     private void closeActivity() {
         cancelAutoHideTimer();
+        if (viewPager != null) {
+            try { viewPager.setUserInputEnabled(true); } catch (Exception ignored) {}
+        }
+        if (activeZoomListener != null) {
+            try { activeZoomListener.reset(); } catch (Exception ignored) {}
+            activeZoomListener = null;
+        }
         finish();
         overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
     }
@@ -235,6 +257,13 @@ public class ImageViewerActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         cancelAutoHideTimer();
+        if (viewPager != null) {
+            try { viewPager.setUserInputEnabled(true); } catch (Exception ignored) {}
+        }
+        if (activeZoomListener != null) {
+            try { activeZoomListener.reset(); } catch (Exception ignored) {}
+            activeZoomListener = null;
+        }
         super.onDestroy();
     }
 
@@ -244,27 +273,36 @@ public class ImageViewerActivity extends AppCompatActivity {
         private final List<Attachment> items;
 
         PageAdapter(Context ctx, List<Attachment> items) {
-            this.ctx = ctx;
+            this.ctx = ctx.getApplicationContext();
             this.items = items;
         }
 
         @NonNull
         @Override
         public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View v = LayoutInflater.from(ctx).inflate(R.layout.item_image_page, parent, false);
+            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_image_page, parent, false);
             return new VH(v);
         }
 
         @Override
         public void onBindViewHolder(@NonNull VH h, int pos) {
+            if (pos < 0 || pos >= items.size()) return;
             Attachment a = items.get(pos);
+            if (a == null || a.fileName == null) return;
             File file = AttachmentUtils.getFile(ctx, a.fileName);
-
-            Glide.with(h.imageView)
-                    .load(file)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .dontAnimate()
-                    .into(h.imageView);
+            if (file == null || !file.exists() || file.length() == 0) {
+                h.imageView.setImageResource(R.drawable.ic_image);
+            } else {
+                try {
+                    Glide.with(h.imageView)
+                            .load(file)
+                            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                            .dontAnimate()
+                            .into(h.imageView);
+                } catch (Exception e) {
+                    h.imageView.setImageResource(R.drawable.ic_image);
+                }
+            }
 
             // Создаем и привязываем умный обработчик зума и панорамирования для этой страницы
             ZoomTouchListener zoomListener = new ZoomTouchListener(viewPager, h.imageView);
@@ -277,8 +315,16 @@ public class ImageViewerActivity extends AppCompatActivity {
         }
 
         @Override
+        public void onViewRecycled(@NonNull VH holder) {
+            super.onViewRecycled(holder);
+            try { Glide.with(holder.imageView).clear(holder.imageView); } catch (Exception ignored) {}
+            holder.imageView.setImageDrawable(null);
+            holder.imageView.setOnTouchListener(null);
+        }
+
+        @Override
         public int getItemCount() {
-            return items.size();
+            return items != null ? items.size() : 0;
         }
 
         class VH extends RecyclerView.ViewHolder {
@@ -299,39 +345,53 @@ public class ImageViewerActivity extends AppCompatActivity {
         private int activePos = 0;
 
         ThumbAdapter(Context ctx, List<Attachment> items, OnItemClickListener listener) {
-            this.ctx = ctx;
+            this.ctx = ctx.getApplicationContext();
             this.items = items;
             this.listener = listener;
         }
 
         void setActivePosition(int pos) {
+            if (items == null || pos < 0 || pos >= items.size()) return;
             int old = activePos;
             activePos = pos;
-            notifyItemChanged(old);
-            notifyItemChanged(activePos);
+            if (old >= 0 && old < getItemCount()) {
+                try { notifyItemChanged(old); } catch (Exception ignored) {}
+            }
+            if (activePos >= 0 && activePos < getItemCount()) {
+                try { notifyItemChanged(activePos); } catch (Exception ignored) {}
+            }
         }
 
         @NonNull
         @Override
         public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View v = LayoutInflater.from(ctx).inflate(R.layout.item_image_thumbnail, parent, false);
+            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_image_thumbnail, parent, false);
             return new VH(v);
         }
 
         @Override
         public void onBindViewHolder(@NonNull VH h, int pos) {
+            if (pos < 0 || pos >= items.size()) return;
             Attachment a = items.get(pos);
+            if (a == null) return;
             File file = AttachmentUtils.getFile(ctx, a.fileName);
-
-            Glide.with(h.thumbnail)
-                    .load(file)
-                    .centerCrop()
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .dontAnimate()
-                    .into(h.thumbnail);
+            if (file == null || !file.exists()) {
+                h.thumbnail.setImageResource(R.drawable.ic_image);
+            } else {
+                try {
+                    Glide.with(h.thumbnail)
+                            .load(file)
+                            .centerCrop()
+                            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                            .dontAnimate()
+                            .into(h.thumbnail);
+                } catch (Exception e) {
+                    h.thumbnail.setImageResource(R.drawable.ic_image);
+                }
+            }
 
             // Показываем золотую рамку для активной миниатюры
-            h.borderSelected.setVisibility(pos == activePos ? View.VISIBLE : View.GONE);
+            if (h.borderSelected != null) h.borderSelected.setVisibility(pos == activePos ? View.VISIBLE : View.GONE);
 
             h.itemView.setOnClickListener(v -> {
                 HapticUtils.light(v);
@@ -342,8 +402,15 @@ public class ImageViewerActivity extends AppCompatActivity {
         }
 
         @Override
+        public void onViewRecycled(@NonNull VH holder) {
+            super.onViewRecycled(holder);
+            try { Glide.with(holder.thumbnail).clear(holder.thumbnail); } catch (Exception ignored) {}
+            holder.thumbnail.setImageDrawable(null);
+        }
+
+        @Override
         public int getItemCount() {
-            return items.size();
+            return items != null ? items.size() : 0;
         }
 
         class VH extends RecyclerView.ViewHolder {
@@ -403,16 +470,21 @@ public class ImageViewerActivity extends AppCompatActivity {
         }
 
         private void apply() {
-            iv.setScaleX(scale);
-            iv.setScaleY(scale);
-            iv.setTranslationX(posX);
-            iv.setTranslationY(posY);
+            if (iv == null) return;
+            try {
+                iv.setScaleX(scale);
+                iv.setScaleY(scale);
+                iv.setTranslationX(posX);
+                iv.setTranslationY(posY);
+            } catch (Exception ignored) {}
         }
 
         public void reset() {
             scale = 1.0f; posX = 0f; posY = 0f;
             apply();
-            pager.setUserInputEnabled(true);
+            if (pager != null) {
+                try { pager.setUserInputEnabled(true); } catch (Exception ignored) {}
+            }
         }
 
         @Override
@@ -609,7 +681,7 @@ public class ImageViewerActivity extends AppCompatActivity {
         private PlaylistSelectionListener selectionListener;
 
         PlaylistGridAdapter(Context ctx, List<Attachment> items, OnItemClickListener clickListener) {
-            this.ctx = ctx;
+            this.ctx = ctx.getApplicationContext();
             this.items = items;
             this.clickListener = clickListener;
         }
@@ -622,13 +694,14 @@ public class ImageViewerActivity extends AppCompatActivity {
         java.util.Set<Integer> getSelectedPositions() { return selectedPositions; }
 
         void toggleSelection(int pos) {
+            if (pos < 0 || pos >= getItemCount()) return;
             if (selectedPositions.contains(pos)) {
                 selectedPositions.remove(pos);
                 if (selectedPositions.isEmpty()) isSelectionMode = false;
             } else {
                 selectedPositions.add(pos);
             }
-            notifyItemChanged(pos);
+            try { notifyItemChanged(pos); } catch (Exception ignored) {}
             if (selectionListener != null) selectionListener.onSelectionChanged();
         }
 
@@ -650,27 +723,36 @@ public class ImageViewerActivity extends AppCompatActivity {
         @NonNull
         @Override
         public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View v = LayoutInflater.from(ctx).inflate(R.layout.item_playlist_grid_cell, parent, false);
+            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_playlist_grid_cell, parent, false);
             return new VH(v);
         }
 
         @Override
         public void onBindViewHolder(@NonNull VH h, int pos) {
+            if (pos < 0 || pos >= items.size()) return;
             Attachment a = items.get(pos);
+            if (a == null) return;
             File file = AttachmentUtils.getFile(ctx, a.fileName);
+            if (file == null || !file.exists()) {
+                h.ivThumb.setImageResource(R.drawable.ic_image);
+            } else {
+                try {
+                    Glide.with(h.ivThumb)
+                            .load(file)
+                            .centerCrop()
+                            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                            .dontAnimate()
+                            .into(h.ivThumb);
+                } catch (Exception e) {
+                    h.ivThumb.setImageResource(R.drawable.ic_image);
+                }
+            }
 
-            Glide.with(h.ivThumb)
-                    .load(file)
-                    .centerCrop()
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .dontAnimate()
-                    .into(h.ivThumb);
-
-            h.ivPlayBadge.setVisibility(View.GONE);
+            if (h.ivPlayBadge != null) h.ivPlayBadge.setVisibility(View.GONE);
             
             boolean isSelected = selectedPositions.contains(pos);
             h.ivThumb.setAlpha(isSelected ? 0.45f : 1.0f);
-            h.borderSelected.setVisibility((isSelected || pos == currentPosition) ? View.VISIBLE : View.GONE);
+            if (h.borderSelected != null) h.borderSelected.setVisibility((isSelected || pos == currentPosition) ? View.VISIBLE : View.GONE);
 
             h.itemView.setOnClickListener(v -> {
                 HapticUtils.light(v);
@@ -696,8 +778,15 @@ public class ImageViewerActivity extends AppCompatActivity {
         }
 
         @Override
+        public void onViewRecycled(@NonNull VH holder) {
+            super.onViewRecycled(holder);
+            try { Glide.with(holder.ivThumb).clear(holder.ivThumb); } catch (Exception ignored) {}
+            holder.ivThumb.setImageDrawable(null);
+        }
+
+        @Override
         public int getItemCount() {
-            return items.size();
+            return items != null ? items.size() : 0;
         }
 
         class VH extends RecyclerView.ViewHolder {

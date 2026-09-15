@@ -128,32 +128,6 @@
                 </LinearLayout>
                 <View style="@style/SettingsDiv" />
                 <LinearLayout style="@style/SettingsRow">
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="@string/settings_active_links"
-                            android:textColor="@color/text_primary"
-                            android:textSize="15sp" />
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="@string/settings_active_links_desc"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-                    <com.google.android.material.switchmaterial.SwitchMaterial
-                        android:id="@+id/sw_active_links"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
-                </LinearLayout>
-                <View style="@style/SettingsDiv" />
-                <LinearLayout style="@style/SettingsRow">
                     <ImageView style="@style/SettingsIcon" android:src="@drawable/ic_eye" />
                     <TextView style="@style/SettingsTitle" android:text="@string/settings_read_mode" />
                     <com.google.android.material.switchmaterial.SwitchMaterial

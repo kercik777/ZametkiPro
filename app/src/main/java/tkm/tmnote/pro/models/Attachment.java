@@ -73,11 +73,47 @@ public class Attachment implements Parcelable {
     }
 
     private static String escape(String s) {
-        return s.replace("\\", "\\\\").replace("|", "\\p").replace("\n", "\\n");
+        if (s == null) return "";
+        StringBuilder out = new StringBuilder(s.length() + 16);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '\\') out.append("\\\\");
+            else if (c == '|') out.append("\\p");
+            else if (c == '\n') out.append("\\n");
+            else out.append(c);
+        }
+        return out.toString();
     }
 
     private static String unescape(String s) {
-        return s.replace("\\n", "\n").replace("\\p", "|").replace("\\\\", "\\");
+        if (s == null) return "";
+        StringBuilder out = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); ) {
+            char c = s.charAt(i);
+            if (c == '\\' && i + 1 < s.length()) {
+                char next = s.charAt(i + 1);
+                if (next == '\\') {
+                    out.append('\\');
+                    i += 2;
+                    continue;
+                } else if (next == 'p') {
+                    out.append('|');
+                    i += 2;
+                    continue;
+                } else if (next == 'n') {
+                    out.append('\n');
+                    i += 2;
+                    continue;
+                }
+                // Unknown escape — treat as literal next char for forward compatibility
+                out.append(next);
+                i += 2;
+            } else {
+                out.append(c);
+                i++;
+            }
+        }
+        return out.toString();
     }
 
     // ===== Parcelable =====

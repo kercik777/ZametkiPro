@@ -133,13 +133,6 @@ public class SettingsActivity extends AppCompatActivity {
             HapticUtils.light(bv);
         });
 
-        SwitchMaterial swActiveLinks = findViewById(R.id.sw_active_links);
-        swActiveLinks.setChecked(prefs.isActiveLinksEnabled());
-        swActiveLinks.setOnCheckedChangeListener((bv, ch) -> {
-            prefs.setActiveLinksEnabled(ch);
-            HapticUtils.light(bv);
-        });
-
         SwitchMaterial swReadMode = findViewById(R.id.sw_read_mode);
         swReadMode.setChecked(prefs.isEditorReadModeEnabled());
         swReadMode.setOnCheckedChangeListener((bv, ch) -> {

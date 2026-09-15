@@ -20,10 +20,16 @@ import tkm.tmnote.pro.utils.AppExecutors;
 import tkm.tmnote.pro.utils.BackupUtils;
 import tkm.tmnote.pro.utils.PrefsManager;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
 public class AutoBackupService extends Service {
 
     private static final String CHANNEL_ID = "auto_backup_channel";
     private static final int NOTIFICATION_ID = 2002;
+    private static final int MAX_BACKUPS_KEEP = 7;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -48,10 +54,27 @@ public class AutoBackupService extends Service {
 
             try {
                 if (uriStr == null || uriStr.isEmpty()) throw new Exception("No folder selected");
-                
+
                 Uri folderUri = Uri.parse(uriStr);
+                boolean hasPersisted = false;
+                try {
+                    for (android.content.UriPermission perm : ctx.getContentResolver().getPersistedUriPermissions()) {
+                        if (perm.getUri().equals(folderUri) && perm.isWritePermission()) { hasPersisted = true; break; }
+                    }
+                } catch (Exception ex) {
+                    try { android.util.Log.e("AutoBackup", "check persisted perm failed", ex); } catch (Exception ignored) {}
+                }
                 DocumentFile folder = DocumentFile.fromTreeUri(ctx, folderUri);
-                if (folder == null || !folder.exists()) throw new Exception("Folder not accessible");
+                if (folder == null || !folder.exists() || !hasPersisted) {
+                    try {
+                        prefs.setAutoBackupEnabled(false);
+                        tkm.tmnote.pro.utils.AutoBackupScheduler.schedule(ctx);
+                    } catch (Exception ex) {
+                        try { android.util.Log.e("AutoBackup", "disable auto backup failed", ex); } catch (Exception ignored) {}
+                    }
+                    throw new Exception("Folder not accessible — auto backup disabled");
+                }
+                if (!folder.canWrite()) throw new Exception("Folder not writable");
 
                 String fileName = BackupUtils.generateBackupFileName();
                 DocumentFile file = folder.createFile("application/zip", fileName);
@@ -66,14 +89,50 @@ public class AutoBackupService extends Service {
                     @Override public void onError(String msg) {}
                 }, false);
 
+                // Clean old backups, keep only last MAX_BACKUPS_KEEP
+                try {
+                    cleanOldBackups(folder);
+                } catch (Exception ignored) {}
+
                 showFinalNotification(getString(R.string.backup_notification_success));
             } catch (Exception e) {
+                try { android.util.Log.e("AutoBackup", "Auto backup failed", e); } catch (Exception ignored) {}
                 showFinalNotification(getString(R.string.backup_notification_error, e.getMessage()));
             } finally {
-                stopForeground(false);
+                try {
+                    stopForeground(false);
+                } catch (Exception ignored) {}
                 stopSelf();
             }
         });
+    }
+
+    private void cleanOldBackups(DocumentFile folder) {
+        if (folder == null) return;
+        DocumentFile[] files = folder.listFiles();
+        if (files == null || files.length <= MAX_BACKUPS_KEEP) return;
+        List<DocumentFile> backups = new ArrayList<>();
+        for (DocumentFile f : files) {
+            if (f == null) continue;
+            String name = f.getName();
+            if (name != null && name.startsWith("TmNotePro_") && name.endsWith(".zip")) {
+                backups.add(f);
+            }
+        }
+        if (backups.size() <= MAX_BACKUPS_KEEP) return;
+        Collections.sort(backups, new Comparator<DocumentFile>() {
+            @Override
+            public int compare(DocumentFile a, DocumentFile b) {
+                long ta = a.lastModified();
+                long tb = b.lastModified();
+                return Long.compare(tb, ta); // newest first
+            }
+        });
+        for (int i = MAX_BACKUPS_KEEP; i < backups.size(); i++) {
+            try {
+                backups.get(i).delete();
+            } catch (Exception ignored) {}
+        }
     }
 
     private void ensureChannel() {
@@ -81,6 +140,7 @@ public class AutoBackupService extends Service {
             NotificationChannel channel = new NotificationChannel(CHANNEL_ID,
                     getString(R.string.backup_auto_title),
                     NotificationManager.IMPORTANCE_LOW);
+            channel.setShowBadge(false);
             NotificationManager nm = getSystemService(NotificationManager.class);
             if (nm != null) nm.createNotificationChannel(channel);
         }
@@ -100,21 +160,26 @@ public class AutoBackupService extends Service {
     private void updateNotification(String content, int progress) {
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm != null) {
-            nm.notify(NOTIFICATION_ID, createNotification(content, progress));
+            try {
+                nm.notify(NOTIFICATION_ID, createNotification(content, progress));
+            } catch (Exception ignored) {}
         }
     }
 
     private void showFinalNotification(String content) {
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm != null) {
-            Notification n = new NotificationCompat.Builder(this, CHANNEL_ID)
-                    .setSmallIcon(R.drawable.ic_save)
-                    .setContentTitle(getString(R.string.backup_auto_title))
-                    .setContentText(content)
-                    .setPriority(NotificationCompat.PRIORITY_LOW)
-                    .setOngoing(false)
-                    .build();
-            nm.notify(NOTIFICATION_ID + 1, n);
+            try {
+                Notification n = new NotificationCompat.Builder(this, CHANNEL_ID)
+                        .setSmallIcon(R.drawable.ic_save)
+                        .setContentTitle(getString(R.string.backup_auto_title))
+                        .setContentText(content)
+                        .setPriority(NotificationCompat.PRIORITY_LOW)
+                        .setOngoing(false)
+                        .setAutoCancel(true)
+                        .build();
+                nm.notify(NOTIFICATION_ID + 1, n);
+            } catch (Exception ignored) {}
         }
     }
 
