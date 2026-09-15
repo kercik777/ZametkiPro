@@ -22,14 +22,10 @@ import android.text.Editable;
 import android.text.Layout;
 import android.text.Spannable;
 import android.text.TextUtils;
-import android.text.TextPaint;
 import android.text.TextWatcher;
 import android.text.method.ArrowKeyMovementMethod;
 import android.text.method.KeyListener;
-import android.text.util.Linkify;
 import android.text.style.BackgroundColorSpan;
-import android.text.style.ClickableSpan;
-import android.text.style.URLSpan;
 import android.speech.tts.TextToSpeech;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -144,10 +140,46 @@ public class EditNoteActivity extends AppCompatActivity {
     private ChecklistEditorAdapter checklistAdapter;
     private AttachmentsEditorAdapter attachmentsAdapter;
 
-    private final Deque<String> undoStack = new ArrayDeque<>();
-    private final Deque<String> redoStack = new ArrayDeque<>();
+    public static Note fastOpenCache = null;
+    public static long fastOpenCacheId = -1;
+
+    private static class UndoState {
+        final String text;
+        final int selStart;
+        final int selEnd;
+        final int scrollY;
+        UndoState(String t, int s, int e, int y) { text = t; selStart = s; selEnd = e; scrollY = y; }
+    }
+    private final Deque<UndoState> undoStack = new ArrayDeque<>();
+    private final Deque<UndoState> redoStack = new ArrayDeque<>();
     private boolean ignoreTextChange = false;
     private String lastContent = "";
+    private int lastSelStart = 0;
+    private int lastSelEnd = 0;
+    private int lastBeforeSelStart = 0;
+    private int lastBeforeSelEnd = 0;
+    private int lastScrollY = 0;
+    private int lastBeforeScrollY = 0;
+    private View contentContainer;
+
+    // --- Large-text optimization fields ---
+    private static final int LARGE_TEXT_THRESHOLD = 20000;
+    private static final long AUTOSAVE_DELAY_SMALL = 1500L;
+    private static final long AUTOSAVE_DELAY_LARGE = 2500L;
+    private static final long UNDO_DEBOUNCE_DELAY = 800L;
+    private static final int MAX_UNDO_STACK = 20;
+    private static final int UNDO_IMMEDIATE_THRESHOLD = 200;
+
+    private final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable pendingUndoRunnable;
+    private Runnable pendingAutosaveRunnable;
+    private int autosaveGeneration = 0;
+    private volatile boolean isAutosaveInProgress = false;
+    private String lastSavedTitle = "";
+    private String lastSavedContent = "";
+    private boolean beforeTextChangeWasLarge = false;
+    private int beforeTextChangeStart = 0;
+    private int beforeTextChangeCount = 0;
 
     private Uri pendingCameraUri;
     private File pendingCameraFile;
@@ -189,6 +221,11 @@ public class EditNoteActivity extends AppCompatActivity {
     private int currentSearchIndex = -1;
     private androidx.core.widget.NestedScrollView scrollContent;
     private boolean isFindMode = false;
+    private Runnable pendingSearchRunnable;
+    private int searchGeneration = 0;
+    private final List<BackgroundColorSpan> activeSearchSpans = new ArrayList<>();
+    private static final int MAX_SEARCH_MATCHES = 1000;
+    private static final long SEARCH_DEBOUNCE = 300L;
     private ImageView btnBack;
     private ImageView btnMore;
     private ImageView btnPalette;
@@ -201,8 +238,6 @@ public class EditNoteActivity extends AppCompatActivity {
     private TextView btnSwitchToEdit;
     private boolean readMode = false;
     private boolean readModeFeatureEnabled = false;
-    private boolean activeLinksEnabled = true;
-    private Runnable pendingLinkApply;
     private KeyListener titleKeyListener;
     private KeyListener contentKeyListener;
     private int titleInputType = 0;
@@ -226,11 +261,39 @@ public class EditNoteActivity extends AppCompatActivity {
             String name = intent.getStringExtra(AttachmentCopyService.EXTRA_CURRENT_NAME);
             boolean finished = intent.hasExtra("finished_all");
             int doneCount = intent.getIntExtra(AttachmentCopyService.EXTRA_DONE, 0);
+            // Use literal keys to stay compatible with older AttachmentCopyService versions
+            String result = intent.getStringExtra("result");
+            int successCount = intent.getIntExtra("success_count", doneCount);
+            int failedCount = intent.getIntExtra("failed_count", 0);
 
-            if (finished || (progressVal >= 100 && total > 0 && doneCount >= total)) {
+            if (finished) {
                 progressBar.setVisibility(View.GONE);
                 copyInProgress = false;
                 if (uiReady && attachmentsAdapter != null) syncAttachmentsFromDb();
+                if (result != null && root != null) {
+                    String msg;
+                    if ("SUCCESS".equals(result)) {
+                        try { msg = getString(R.string.service_copy_done, successCount); }
+                        catch (Exception e) { msg = "Скопировано: " + successCount; }
+                    } else if ("PARTIAL".equals(result)) {
+                        try { msg = getString(R.string.service_copy_partial, successCount, failedCount); }
+                        catch (Exception e) { msg = "Скопировано: " + successCount + ", не удалось: " + failedCount; }
+                    } else if ("CANCELLED".equals(result)) {
+                        try { msg = getString(R.string.service_copy_cancelled); }
+                        catch (Exception e) { msg = "Копирование отменено"; }
+                    } else {
+                        try { msg = getString(R.string.service_copy_failed); }
+                        catch (Exception e) { msg = "Не удалось скопировать файлы"; }
+                    }
+                    Snackbar.make(root, msg, Snackbar.LENGTH_SHORT).show();
+                }
+            } else if (progressVal == -2) {
+                progressBar.setVisibility(View.VISIBLE);
+                copyInProgress = true;
+                String txt = (name != null ? name + "  " : "") +
+                        "(" + Math.min(doneCount + 1, total) + "/" + total + ")";
+                progressLabel.setText(txt);
+                progressIndicator.setIndeterminate(true);
             } else if (progressVal >= 0) {
                 progressBar.setVisibility(View.VISIBLE);
                 copyInProgress = true;
@@ -240,6 +303,14 @@ public class EditNoteActivity extends AppCompatActivity {
                 if (progressVal > 0) {
                     progressIndicator.setIndeterminate(false);
                     progressIndicator.setProgress(progressVal);
+                } else {
+                    progressIndicator.setIndeterminate(true);
+                }
+            } else if (progressVal == -1) {
+                progressBar.setVisibility(View.VISIBLE);
+                copyInProgress = true;
+                if (name != null && root != null) {
+                    Snackbar.make(root, "Не удалось: " + name, Snackbar.LENGTH_SHORT).show();
                 }
             }
         }
@@ -261,26 +332,101 @@ public class EditNoteActivity extends AppCompatActivity {
         sourceFilter = getIntent().getIntExtra("source_filter", -1);
         isNew = id == 0;
         startedAsNew = isNew;
-        if (isNew) {
-            note = new Note();
-            if (defaultCatId > 0) note.setCategoryId(defaultCatId);
-            // Применяем размер текста по умолчанию из настроек (только для новой).
-            try { note.setTextSize(new PrefsManager(this).getDefaultTextSize()); } catch (Exception ignored) {}
-        } else {
-            note = repo.getNoteById(id);
-            if (note == null) { finish(); return; }
-        }
 
         registerUnlockLauncher();
         bindViews();
         registerLaunchers();
         registerBackCallback();
 
-        if (note.isLocked() && !unlocked) {
-            askUnlock();
-            return;
+        if (isNew) {
+            note = new Note();
+            if (defaultCatId > 0) note.setCategoryId(defaultCatId);
+            try { note.setTextSize(new PrefsManager(this).getDefaultTextSize()); } catch (Exception ignored) {}
+            if (note.isLocked() && !unlocked) {
+                askUnlock();
+                return;
+            }
+            proceedSetup();
+        } else {
+            if (fastOpenCache != null && fastOpenCacheId == id) {
+                note = fastOpenCache;
+                fastOpenCache = null;
+                fastOpenCacheId = -1;
+                if (note.isLocked() && !unlocked) {
+                    askUnlock();
+                    return;
+                }
+                proceedSetup();
+                final long bgId = id;
+                AppExecutors.getInstance().diskIO().execute(() -> {
+                    try {
+                        Note fresh = repo.getNoteById(bgId);
+                        if (fresh != null) {
+                            mainHandler.post(() -> {
+                                if (note != null && note.getId() == bgId) {
+                                    if (!fresh.getContent().equals(note.getContent()) || !fresh.getTitle().equals(note.getTitle())) {
+                                        int selStart = 0, selEnd = 0;
+                                        try {
+                                            if (etContent != null) {
+                                                selStart = etContent.getSelectionStart();
+                                                selEnd = etContent.getSelectionEnd();
+                                            }
+                                        } catch (Exception ignored) {}
+                                        note = fresh;
+                                        initialTitle = fresh.getTitle();
+                                        initialContent = fresh.getContent();
+                                        initialChecklistJson = fresh.getChecklistJson();
+                                        initialAttachmentsJson = fresh.getAttachmentsJson();
+                                        initialColor = fresh.getColorIndex();
+                                        initialCategoryId = fresh.getCategoryId();
+                                        initialPinned = fresh.isPinned();
+                                        initialFavorite = fresh.isFavorite();
+                                        initialLocked = fresh.isLocked();
+                                        initialReminder = fresh.getReminderAt();
+                                        initialType = fresh.getType();
+                                        initialTextSize = fresh.getTextSize();
+                                        lastSavedTitle = initialTitle;
+                                        lastSavedContent = initialContent;
+                                        ignoreTextChange = true;
+                                        try {
+                                            etTitle.setText(initialTitle);
+                                            if (note.getType() == Note.TYPE_TEXT) {
+                                                etContent.setText(initialContent != null ? initialContent : "", TextView.BufferType.EDITABLE);
+                                                lastContent = initialContent != null ? initialContent : "";
+                                                try {
+                                                    int len = etContent.getText() != null ? etContent.getText().length() : 0;
+                                                    etContent.setSelection(Math.min(selStart, len));
+                                                } catch (Exception ignored) {}
+                                            }
+                                        } finally { ignoreTextChange = false; }
+                                        updatePinFav();
+                                        updateCategoryLabelAsync();
+                                        updateReminderLabel();
+                                        applyColor();
+                                        reloadAttachments();
+                                    }
+                                }
+                            });
+                        }
+                    } catch (Exception ignored) {}
+                });
+                return;
+            }
+            AppExecutors.getInstance().diskIO().execute(() -> {
+                Note loaded;
+                try { loaded = repo.getNoteById(id); } catch (Exception e) { loaded = null; }
+                Note finalLoaded = loaded;
+                mainHandler.post(() -> {
+                    if (finalLoaded == null) { finish(); return; }
+                    note = finalLoaded;
+                    if (note.isLocked() && !unlocked) {
+                        askUnlock();
+                        return;
+                    }
+                    proceedSetup();
+                });
+            });
         }
-        proceedSetup();
     }
 
     private void registerUnlockLauncher() {
@@ -351,6 +497,7 @@ public class EditNoteActivity extends AppCompatActivity {
         btnSearchPrev = findViewById(R.id.btn_search_prev);
         btnSearchNext = findViewById(R.id.btn_search_next);
         scrollContent = findViewById(R.id.scroll_content);
+        contentContainer = findViewById(R.id.content_container);
         btnBack = findViewById(R.id.btn_back);
         btnMore = findViewById(R.id.btn_more);
         btnPalette = findViewById(R.id.btn_palette);
@@ -413,17 +560,11 @@ public class EditNoteActivity extends AppCompatActivity {
         contentInputType = etContent != null ? etContent.getInputType() : 0;
 
         btnBack.setOnClickListener(v -> { HapticUtils.light(v); saveAndFinish(); });
-
         btnMore.setOnClickListener(v -> { HapticUtils.light(v); showMoreSheet(); });
-
         btnPalette.setOnClickListener(v -> { HapticUtils.light(v); showColorSheet(); });
-
         btnCheck.setOnClickListener(v -> { HapticUtils.light(v); toggleChecklistMode(); });
-
         btnAttach.setOnClickListener(v -> { HapticUtils.light(v); showAttachSheet(); });
-
         btnReminderQuick.setOnClickListener(v -> { HapticUtils.light(v); showReminderSheet(); });
-
         btnFindReplace.setOnClickListener(v -> { HapticUtils.light(v); toggleFindMode(); });
 
         btnReadMode.setOnClickListener(v -> {
@@ -445,6 +586,8 @@ public class EditNoteActivity extends AppCompatActivity {
             updatePinFav();
             Snackbar.make(root, note.isPinned() ? R.string.msg_pinned : R.string.msg_unpinned,
                     Snackbar.LENGTH_SHORT).show();
+            dirty = true;
+            scheduleAutosaveDebounced();
         });
         btnFav.setOnClickListener(v -> {
             HapticUtils.light(v);
@@ -457,6 +600,7 @@ public class EditNoteActivity extends AppCompatActivity {
         tvCategory.setOnClickListener(v -> { HapticUtils.light(v); showCategorySheet(); });
         tvReminder.setOnClickListener(v -> { HapticUtils.light(v); showReminderSheet(); });
 
+        // Save initial snapshots without heavy toString copies where possible
         initialTitle = note.getTitle();
         initialContent = note.getContent();
         initialChecklistJson = note.getChecklistJson();
@@ -469,74 +613,165 @@ public class EditNoteActivity extends AppCompatActivity {
         initialReminder = note.getReminderAt();
         initialType = note.getType();
         initialTextSize = note.getTextSize();
+        lastSavedTitle = initialTitle;
+        lastSavedContent = initialContent;
 
+        // --- Optimized loading: show UI fast, minimal init ---
         ignoreTextChange = true;
-        etTitle.setText(note.getTitle());
+        try {
+            etTitle.setText(initialTitle);
+        } catch (Exception ignored) {}
         if (note.getType() == Note.TYPE_TEXT) {
-            etContent.setText(note.getContent());
-            lastContent = note.getContent();
+            try {
+                String content = initialContent != null ? initialContent : "";
+                etContent.setText(content, TextView.BufferType.EDITABLE);
+                lastContent = content;
+                lastSelStart = 0;
+                lastSelEnd = 0;
+            } catch (Exception e) {
+                etContent.setText("");
+                lastContent = "";
+            }
             showTextMode();
         } else {
             showChecklistMode();
         }
         applyTextSize(note.getTextSize());
+        try {
+            etContent.setIncludeFontPadding(false);
+            if (Build.VERSION.SDK_INT >= 28) etContent.setFallbackLineSpacing(false);
+            etContent.setElegantTextHeight(false);
+            etContent.setHorizontallyScrolling(false);
+            etContent.setSaveEnabled(false);
+            etContent.setFreezesText(false);
+        } catch (Exception ignored) {}
+
+        // Large text: make EditText fixed height to avoid parent requestLayout on each keystroke
+        try {
+            if (initialContent != null && initialContent.length() > LARGE_TEXT_THRESHOLD) {
+                if (scrollContent != null) {
+                    scrollContent.setNestedScrollingEnabled(false);
+                }
+                if (contentContainer != null && etContent != null) {
+                    android.view.ViewGroup.LayoutParams cLp = contentContainer.getLayoutParams();
+                    if (cLp != null) {
+                        cLp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+                        contentContainer.setLayoutParams(cLp);
+                    }
+                    if (contentContainer instanceof LinearLayout) {
+                        LinearLayout.LayoutParams eLp = (LinearLayout.LayoutParams) etContent.getLayoutParams();
+                        if (eLp != null) {
+                            eLp.height = 0;
+                            eLp.weight = 1;
+                            etContent.setLayoutParams(eLp);
+                        }
+                    }
+                    etContent.setMinHeight(0);
+                    etContent.setMinimumHeight(0);
+                    etContent.setVerticalScrollBarEnabled(true);
+                    etContent.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+                    etContent.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
+                }
+            }
+        } catch (Exception ignored) {}
+
         ignoreTextChange = false;
 
+        updatePinFav();
 
+        // Title TextWatcher: lightweight, only mark dirty and schedule autosave
         etTitle.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (ignoreTextChange) return;
+                dirty = true;
+                scheduleAutosaveDebounced();
+            }
             @Override public void afterTextChanged(Editable s) {}
         });
 
         etContent.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                if (ignoreTextChange) return;
+                beforeTextChangeStart = start;
+                beforeTextChangeCount = count;
+                int afterLen = after;
+                int delta = Math.max(count, afterLen);
+                beforeTextChangeWasLarge = delta > UNDO_IMMEDIATE_THRESHOLD;
+                try {
+                    lastBeforeSelStart = etContent.getSelectionStart();
+                    lastBeforeSelEnd = etContent.getSelectionEnd();
+                    lastBeforeScrollY = getCurrentScrollY();
+                } catch (Exception e) {
+                    lastBeforeSelStart = start;
+                    lastBeforeSelEnd = start;
+                    lastBeforeScrollY = getCurrentScrollY();
+                }
+                if (beforeTextChangeWasLarge) {
+                    pushUndo(s != null ? s.toString() : lastContent, lastBeforeSelStart, lastBeforeSelEnd, lastBeforeScrollY);
+                    redoStack.clear();
+                }
+            }
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
                 if (ignoreTextChange) return;
-                pushUndo(lastContent);
-                lastContent = s.toString();
-                redoStack.clear();
-                updateUndoButtons();
-            }
-            @Override public void afterTextChanged(Editable s) {
-                if (ignoreTextChange) return;
-                if (etContent != null && pendingLinkApply != null) {
-                    etContent.removeCallbacks(pendingLinkApply);
+                dirty = true;
+                scheduleUndoDebounced();
+                scheduleAutosaveDebounced();
+                // For large text, avoid UI work on each keystroke
+                if (!isLargeTextMode()) {
+                    updateUndoButtons();
                 }
-                pendingLinkApply = () -> {
-                    applyContentLinks();
-                    pendingLinkApply = null;
-                };
-                if (etContent != null) etContent.postDelayed(pendingLinkApply, 400L);
             }
+            @Override public void afterTextChanged(Editable s) {}
         });
 
-        btnAddItem.setOnClickListener(v -> { HapticUtils.light(v); checklistAdapter.addNew(); });
+        btnAddItem.setOnClickListener(v -> { HapticUtils.light(v); if (checklistAdapter != null) checklistAdapter.addNew(); });
 
-        attachmentsAdapter = new AttachmentsEditorAdapter(this, note.getAttachments(),
+        // --- Attachment rocket optimization: instant UI, no blocking ---
+        if (rvAttachments != null) {
+            try {
+                rvAttachments.setHasFixedSize(true);
+                rvAttachments.setItemViewCacheSize(20);
+                rvAttachments.setDrawingCacheEnabled(true);
+                rvAttachments.setDrawingCacheQuality(View.DRAWING_CACHE_QUALITY_LOW);
+            } catch (Exception ignored) {}
+        }
+        attachmentsAdapter = new AttachmentsEditorAdapter(this, new ArrayList<>(),
                 new AttachmentsEditorAdapter.Callback() {
                     @Override public void onClick(Attachment a) {
                         if (readMode) return;
                         openAttachment(a);
                     }
                     @Override public void onLongClick(Attachment a) {
-                        // long-click сам переключает selection в адаптере;
-                        // здесь можем добавить вибрацию
                         HapticUtils.medium(rvAttachments);
                     }
                 });
         rvAttachments.setAdapter(attachmentsAdapter);
         setupAttachmentsSelectionBar();
-        reloadAttachments();
+        // Load attachments off UI thread after first frame for instant editor open
+        mainHandler.post(() -> {
+            AppExecutors.getInstance().diskIO().execute(() -> {
+                List<Attachment> atts;
+                try { atts = note.getAttachments(); } catch (Exception e) { atts = new ArrayList<>(); }
+                List<Attachment> finalAtts = atts;
+                mainHandler.post(() -> {
+                    try {
+                        if (attachmentsAdapter != null) {
+                            attachmentsAdapter.setData(finalAtts);
+                            rvAttachments.setVisibility(finalAtts.isEmpty() ? View.GONE : View.VISIBLE);
+                            applyAttachmentsLayout(finalAtts.size());
+                        }
+                    } catch (Exception ignored) {}
+                });
+            });
+        });
 
         applyColor();
-        updatePinFav();
-        updateCategoryLabel();
+        // Defer category label DB read off UI thread
+        updateCategoryLabelAsync();
         updateReminderLabel();
         updateUndoButtons();
         setupFindInlineBar();
-        activeLinksEnabled = prefs.isActiveLinksEnabled();
-        applyContentLinks();
         setReadMode(!isNew && prefs.isEditorReadModeEnabled(), false);
 
         if (isNew) {
@@ -553,6 +788,215 @@ public class EditNoteActivity extends AppCompatActivity {
         updateUndoButtons();
 
         uiReady = true;
+    }
+
+    private boolean isLargeTextMode() {
+        try {
+            if (etContent != null && etContent.getText() != null) {
+                return etContent.getText().length() > LARGE_TEXT_THRESHOLD;
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private int getCurrentScrollY() {
+        try {
+            if (scrollContent != null) return scrollContent.getScrollY();
+        } catch (Exception ignored) {}
+        return 0;
+    }
+
+    private void scheduleUndoDebounced() {
+        if (ignoreTextChange) return;
+        if (pendingUndoRunnable != null) {
+            mainHandler.removeCallbacks(pendingUndoRunnable);
+        }
+        pendingUndoRunnable = () -> {
+            if (ignoreTextChange) return;
+            try {
+                if (etContent != null && etContent.getText() != null) {
+                    String current = etContent.getText().toString();
+                    int curSelStart = 0, curSelEnd = 0;
+                    int curScroll = getCurrentScrollY();
+                    try {
+                        curSelStart = etContent.getSelectionStart();
+                        curSelEnd = etContent.getSelectionEnd();
+                    } catch (Exception ignored) {}
+                    if (!current.equals(lastContent)) {
+                        if (!beforeTextChangeWasLarge) {
+                            pushUndo(lastContent, lastSelStart, lastSelEnd, lastScrollY);
+                            redoStack.clear();
+                        }
+                        lastContent = current;
+                        lastSelStart = curSelStart;
+                        lastSelEnd = curSelEnd;
+                        lastScrollY = curScroll;
+                        updateUndoButtons();
+                    } else {
+                        lastSelStart = curSelStart;
+                        lastSelEnd = curSelEnd;
+                        lastScrollY = curScroll;
+                    }
+                }
+            } catch (Exception ignored) {}
+            pendingUndoRunnable = null;
+        };
+        mainHandler.postDelayed(pendingUndoRunnable, UNDO_DEBOUNCE_DELAY);
+    }
+
+    private void scheduleAutosaveDebounced() {
+        if (!uiReady) return;
+        if (prefs != null && prefs.isConfirmSaveOnExitEnabled()) return;
+        if (copyInProgress) return;
+        if (pendingAutosaveRunnable != null) {
+            mainHandler.removeCallbacks(pendingAutosaveRunnable);
+        }
+        long delay = isLargeTextMode() ? AUTOSAVE_DELAY_LARGE : AUTOSAVE_DELAY_SMALL;
+        pendingAutosaveRunnable = this::performAutosaveAsync;
+        mainHandler.postDelayed(pendingAutosaveRunnable, delay);
+    }
+
+    private void cancelPendingRunnables() {
+        if (pendingUndoRunnable != null) {
+            mainHandler.removeCallbacks(pendingUndoRunnable);
+            pendingUndoRunnable = null;
+        }
+        if (pendingAutosaveRunnable != null) {
+            mainHandler.removeCallbacks(pendingAutosaveRunnable);
+            pendingAutosaveRunnable = null;
+        }
+        if (pendingSearchRunnable != null) {
+            mainHandler.removeCallbacks(pendingSearchRunnable);
+            pendingSearchRunnable = null;
+        }
+        searchGeneration++;
+    }
+
+    private void performAutosaveAsync() {
+        if (note == null) return;
+        if (prefs != null && prefs.isConfirmSaveOnExitEnabled()) return;
+        if (copyInProgress) return;
+        if (isAutosaveInProgress) {
+            scheduleAutosaveDebounced();
+            return;
+        }
+        // Capture UI data on UI thread quickly
+        String title;
+        String content;
+        try {
+            title = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : note.getTitle();
+        } catch (Exception e) {
+            title = note.getTitle();
+        }
+        try {
+            content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
+        } catch (Exception e) {
+            content = note.getContent();
+        }
+        if (title.equals(lastSavedTitle) && content.equals(lastSavedContent) && !dirty) {
+            return;
+        }
+        final String finalTitle = title;
+        final String finalContent = content;
+        final int gen = ++autosaveGeneration;
+        isAutosaveInProgress = true;
+
+        // Capture all note fields on UI thread to avoid touching note from background
+        final long noteId = note.getId();
+        final int noteType = note.getType();
+        final int colorIndex = note.getColorIndex();
+        final long categoryId = note.getCategoryId();
+        final boolean pinned = note.isPinned();
+        final boolean favorite = note.isFavorite();
+        final boolean locked = note.isLocked();
+        final long reminderAt = note.getReminderAt();
+        final int textSize = note.getTextSize();
+        final String attachmentsJson = note.getAttachmentsJson();
+        final long createdAt = note.getCreatedAt();
+        final String existingChecklistJson = note.getChecklistJson();
+        final String existingContent = note.getContent();
+
+        final String checklistJson;
+        if (noteType == Note.TYPE_CHECKLIST && checklistAdapter != null) {
+            String tmp;
+            try { tmp = tkm.tmnote.pro.models.ChecklistItem.toJson(checklistAdapter.getItems()); }
+            catch (Exception e) { tmp = existingChecklistJson; }
+            checklistJson = tmp;
+        } else {
+            checklistJson = null;
+        }
+
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            try {
+                if (gen < autosaveGeneration) {
+                    return;
+                }
+                Note toSave = new Note();
+                toSave.setId(noteId);
+                toSave.setTitle(finalTitle);
+                if (noteType == Note.TYPE_TEXT) {
+                    toSave.setContent(finalContent);
+                } else {
+                    if (checklistJson != null) toSave.setChecklistJson(checklistJson);
+                    else toSave.setChecklistJson(existingChecklistJson);
+                    toSave.setContent(existingContent);
+                }
+                toSave.setType(noteType);
+                toSave.setColorIndex(colorIndex);
+                toSave.setCategoryId(categoryId);
+                toSave.setPinned(pinned);
+                toSave.setFavorite(favorite);
+                toSave.setLocked(locked);
+                toSave.setReminderAt(reminderAt);
+                toSave.setTextSize(textSize);
+                toSave.setAttachmentsJson(attachmentsJson);
+                toSave.setCreatedAt(createdAt);
+                toSave.setUpdatedAt(System.currentTimeMillis());
+
+                if (toSave.getId() == 0) {
+                    long newId = repo.addNote(toSave);
+                    mainHandler.post(() -> {
+                        if (note != null && note.getId() == 0) {
+                            note.setId(newId);
+                            isNew = false;
+                        }
+                    });
+                } else {
+                    repo.updateNote(toSave);
+                    mainHandler.post(() -> {
+                        if (note != null && note.getId() == toSave.getId()) {
+                            note.setTitle(finalTitle);
+                            if (noteType == Note.TYPE_TEXT) note.setContent(finalContent);
+                            else if (checklistJson != null) note.setChecklistJson(checklistJson);
+                        }
+                    });
+                }
+
+                mainHandler.post(() -> {
+                    lastSavedTitle = finalTitle;
+                    lastSavedContent = finalContent;
+                    if (gen == autosaveGeneration) dirty = false;
+                });
+
+                mainHandler.post(() -> {
+                    try {
+                        if (reminderAt > System.currentTimeMillis() && noteId > 0) {
+                            ReminderUtils.schedule(EditNoteActivity.this, noteId, reminderAt);
+                        } else if (noteId > 0) {
+                            ReminderUtils.cancel(EditNoteActivity.this, noteId);
+                        }
+                    } catch (Exception ignored) {}
+                });
+
+            } catch (Exception e) {
+                try { android.util.Log.e("EditNote", "autosave failed", e); } catch (Exception ignored) {}
+            } finally {
+                mainHandler.post(() -> {
+                    isAutosaveInProgress = false;
+                    if (autosaveGeneration > gen) scheduleAutosaveDebounced();
+                });
+            }
+        });
     }
 
     private void registerLaunchers() {
@@ -732,19 +1176,34 @@ public class EditNoteActivity extends AppCompatActivity {
     }
 
     private void syncAttachmentsFromDb() {
-        if (note != null && note.getId() > 0) {
-            Note fresh = repo.getNoteById(note.getId());
-            if (fresh != null) {
-                List<Attachment> merged = fresh.getAttachments();
-                if (!pendingDeleteAttachmentFiles.isEmpty()) {
-                    merged.removeIf(att -> att != null
-                            && att.fileName != null
-                            && pendingDeleteAttachmentFiles.contains(att.fileName));
-                }
-                note.setAttachments(merged);
-            }
+        if (note == null || note.getId() <= 0) {
+            reloadAttachments();
+            return;
         }
-        reloadAttachments();
+        final long nid = note.getId();
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            try {
+                Note fresh = repo.getNoteById(nid);
+                if (fresh != null) {
+                    List<Attachment> merged = fresh.getAttachments();
+                    if (!pendingDeleteAttachmentFiles.isEmpty()) {
+                        merged.removeIf(att -> att != null
+                                && att.fileName != null
+                                && pendingDeleteAttachmentFiles.contains(att.fileName));
+                    }
+                    mainHandler.post(() -> {
+                        if (note != null && note.getId() == nid) {
+                            note.setAttachments(merged);
+                            reloadAttachments();
+                        }
+                    });
+                } else {
+                    mainHandler.post(this::reloadAttachments);
+                }
+            } catch (Exception e) {
+                mainHandler.post(this::reloadAttachments);
+            }
+        });
     }
 
     private void applyAttachmentsLayout(int count) {
@@ -769,34 +1228,120 @@ public class EditNoteActivity extends AppCompatActivity {
         attachmentsAdapter.notifyDataSetChanged();
     }
 
+    private void pushUndo(String text, int selStart, int selEnd, int scrollY) {
+        if (text == null) return;
+        if (!undoStack.isEmpty() && text.equals(undoStack.peek().text)) return;
+        int max = isLargeTextMode() ? 10 : MAX_UNDO_STACK;
+        try {
+            if (etContent != null && etContent.getText() != null && etContent.getText().length() > 100000) {
+                max = 5;
+            }
+        } catch (Exception ignored) {}
+        while (undoStack.size() >= max) {
+            undoStack.pollLast();
+        }
+        undoStack.push(new UndoState(text, selStart, selEnd, scrollY));
+        while (redoStack.size() > max) {
+            redoStack.pollLast();
+        }
+    }
+    private void pushUndo(String text, int selStart, int selEnd) {
+        pushUndo(text, selStart, selEnd, getCurrentScrollY());
+    }
     private void pushUndo(String text) {
-        if (undoStack.size() > 100) undoStack.pollLast();
-        undoStack.push(text);
+        pushUndo(text, 0, 0, getCurrentScrollY());
     }
 
     private void doUndo() {
         if (!ensureEditableMode(getString(R.string.edit_note_read_mode_enabled))) return;
         if (undoStack.isEmpty()) return;
-        String prev = undoStack.pop();
-        redoStack.push(lastContent);
+        String current;
+        int curSelStart = 0, curSelEnd = 0;
+        int curScroll = getCurrentScrollY();
+        try {
+            current = etContent != null && etContent.getText() != null ? etContent.getText().toString() : lastContent;
+            curSelStart = etContent.getSelectionStart();
+            curSelEnd = etContent.getSelectionEnd();
+        } catch (Exception e) {
+            current = lastContent;
+        }
+        if (current != null && !current.equals(lastContent)) {
+            redoStack.push(new UndoState(current, curSelStart, curSelEnd, curScroll));
+            if (redoStack.size() > MAX_UNDO_STACK) redoStack.pollLast();
+        } else {
+            redoStack.push(new UndoState(lastContent, lastSelStart, lastSelEnd, lastScrollY));
+            if (redoStack.size() > MAX_UNDO_STACK) redoStack.pollLast();
+        }
+        UndoState prev = undoStack.pop();
         ignoreTextChange = true;
-        etContent.setText(prev);
-        etContent.setSelection(prev.length());
-        lastContent = prev;
-        ignoreTextChange = false;
+        try {
+            etContent.setText(prev.text);
+            lastContent = prev.text;
+            lastSelStart = prev.selStart;
+            lastSelEnd = prev.selEnd;
+            lastScrollY = prev.scrollY;
+            try {
+                int len = etContent.getText() != null ? etContent.getText().length() : 0;
+                int s = Math.max(0, Math.min(prev.selStart, len));
+                int e = Math.max(0, Math.min(prev.selEnd, len));
+                etContent.setSelection(s, e);
+            } catch (Exception ignored) {
+                try { etContent.setSelection(Math.min(prev.text.length(), etContent.getText().length())); } catch (Exception ignored2) {}
+            }
+            // Restore scroll after layout
+            final int restoreY = prev.scrollY;
+            if (scrollContent != null) {
+                scrollContent.post(() -> {
+                    try { scrollContent.scrollTo(0, restoreY); } catch (Exception ignored) {}
+                });
+            }
+            dirty = true;
+            scheduleAutosaveDebounced();
+        } finally {
+            ignoreTextChange = false;
+        }
         updateUndoButtons();
     }
 
     private void doRedo() {
         if (!ensureEditableMode(getString(R.string.edit_note_read_mode_enabled))) return;
         if (redoStack.isEmpty()) return;
-        String next = redoStack.pop();
-        undoStack.push(lastContent);
+        UndoState next = redoStack.pop();
+        try {
+            String cur = etContent != null && etContent.getText() != null ? etContent.getText().toString() : lastContent;
+            int curS = 0, curE = 0;
+            int curY = getCurrentScrollY();
+            try { curS = etContent.getSelectionStart(); curE = etContent.getSelectionEnd(); } catch (Exception ignored) {}
+            if (cur != null) pushUndo(cur, curS, curE, curY);
+        } catch (Exception ignored) {
+            pushUndo(lastContent, lastSelStart, lastSelEnd, lastScrollY);
+        }
         ignoreTextChange = true;
-        etContent.setText(next);
-        etContent.setSelection(next.length());
-        lastContent = next;
-        ignoreTextChange = false;
+        try {
+            etContent.setText(next.text);
+            lastContent = next.text;
+            lastSelStart = next.selStart;
+            lastSelEnd = next.selEnd;
+            lastScrollY = next.scrollY;
+            try {
+                int len = etContent.getText() != null ? etContent.getText().length() : 0;
+                int s = Math.max(0, Math.min(next.selStart, len));
+                int e = Math.max(0, Math.min(next.selEnd, len));
+                etContent.setSelection(s, e);
+            } catch (Exception ignored) {
+                try { etContent.setSelection(Math.min(next.text.length(), etContent.getText().length())); } catch (Exception ignored2) {}
+            }
+            final int restoreY = next.scrollY;
+            if (scrollContent != null) {
+                scrollContent.post(() -> {
+                    try { scrollContent.scrollTo(0, restoreY); } catch (Exception ignored) {}
+                });
+            }
+            dirty = true;
+            scheduleAutosaveDebounced();
+        } finally {
+            ignoreTextChange = false;
+        }
         updateUndoButtons();
     }
 
@@ -895,6 +1440,7 @@ public class EditNoteActivity extends AppCompatActivity {
         }
         setTextTapToFocusEnabled(!enabled && note.getType() == Note.TYPE_TEXT);
         updateUndoButtons();
+        updatePinFav();
         updateReadModeUi();
 
         if (fromUser && root != null && sourceFilter != 5) {
@@ -1032,12 +1578,41 @@ public class EditNoteActivity extends AppCompatActivity {
     }
 
     private void updateCategoryLabel() {
+        // Legacy sync version, kept for quick calls but delegates to async if needed
         if (note.getCategoryId() <= 0) {
             tvCategory.setText(R.string.no_category);
         } else {
-            Category c = repo.getCategoryById(note.getCategoryId());
-            tvCategory.setText(c != null ? c.getName() : getString(R.string.no_category));
+            // Try quick, but if DB heavy, async version should be used
+            try {
+                Category c = repo.getCategoryById(note.getCategoryId());
+                tvCategory.setText(c != null ? c.getName() : getString(R.string.no_category));
+            } catch (Exception e) {
+                tvCategory.setText(R.string.no_category);
+            }
         }
+    }
+
+    private void updateCategoryLabelAsync() {
+        if (tvCategory == null || note == null) return;
+        if (note.getCategoryId() <= 0) {
+            tvCategory.setText(R.string.no_category);
+            return;
+        }
+        final long catId = note.getCategoryId();
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            try {
+                Category c = repo.getCategoryById(catId);
+                mainHandler.post(() -> {
+                    if (tvCategory != null) {
+                        tvCategory.setText(c != null ? c.getName() : getString(R.string.no_category));
+                    }
+                });
+            } catch (Exception ignored) {
+                mainHandler.post(() -> {
+                    if (tvCategory != null) tvCategory.setText(R.string.no_category);
+                });
+            }
+        });
     }
 
     private void updateReminderLabel() {
@@ -1137,93 +1712,6 @@ public class EditNoteActivity extends AppCompatActivity {
         if (imm != null) imm.showSoftInput(etContent, 0);
     }
 
-    private void setupContentLinkTouchHandler() {
-        if (etContent == null) return;
-        etContent.setOnTouchListener(null);
-    }
-
-    private void applyContentLinks() {
-        if (etContent == null || etContent.getText() == null) return;
-        Editable editable = etContent.getText();
-        LinkActionSpan[] custom = editable.getSpans(0, editable.length(), LinkActionSpan.class);
-        for (LinkActionSpan span : custom) editable.removeSpan(span);
-        URLSpan[] urlSpans = editable.getSpans(0, editable.length(), URLSpan.class);
-        for (URLSpan span : urlSpans) editable.removeSpan(span);
-        if (!activeLinksEnabled) {
-            if (!readMode) etContent.setMovementMethod(ArrowKeyMovementMethod.getInstance());
-            return;
-        }
-        try {
-            Linkify.addLinks(editable, Linkify.WEB_URLS | Linkify.EMAIL_ADDRESSES | Linkify.PHONE_NUMBERS);
-            URLSpan[] spans = editable.getSpans(0, editable.length(), URLSpan.class);
-            for (URLSpan span : spans) {
-                int start = editable.getSpanStart(span);
-                int end = editable.getSpanEnd(span);
-                int flags = editable.getSpanFlags(span);
-                String url = span.getURL();
-                editable.removeSpan(span);
-                editable.setSpan(new LinkActionSpan(url, detectLinkType(url)), start, end, flags);
-            }
-        } catch (Exception ignored) {}
-    }
-
-    private int detectLinkType(String url) {
-        if (url == null) return LinkActionSpan.TYPE_WEB;
-        String lower = url.toLowerCase(Locale.getDefault());
-        if (lower.startsWith("mailto:")) return LinkActionSpan.TYPE_EMAIL;
-        if (lower.startsWith("tel:")) return LinkActionSpan.TYPE_PHONE;
-        return LinkActionSpan.TYPE_WEB;
-    }
-
-    private void openLinkAction(int type, String url) {
-        if (url == null || url.trim().isEmpty()) return;
-        String title;
-        Intent intent;
-        if (type == LinkActionSpan.TYPE_EMAIL) {
-            title = getString(R.string.link_type_email);
-            intent = new Intent(Intent.ACTION_SENDTO, Uri.parse(url));
-        } else if (type == LinkActionSpan.TYPE_PHONE) {
-            title = getString(R.string.link_type_phone);
-            intent = new Intent(Intent.ACTION_DIAL, Uri.parse(url));
-        } else {
-            title = getString(R.string.link_type_web);
-            intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-        }
-        String message = url.replace("mailto:", "").replace("tel:", "");
-        ConfirmSheet.show(this, title, message, getString(R.string.open), getString(R.string.cancel), false, R.drawable.ic_info, () -> {
-            try {
-                startActivity(intent);
-            } catch (Exception e) {
-                Snackbar.make(root, getString(R.string.link_open_failed), Snackbar.LENGTH_SHORT).show();
-            }
-        }, null);
-    }
-
-    private final class LinkActionSpan extends ClickableSpan {
-        static final int TYPE_WEB = 0;
-        static final int TYPE_EMAIL = 1;
-        static final int TYPE_PHONE = 2;
-
-        final String url;
-        final int type;
-
-        LinkActionSpan(String url, int type) {
-            this.url = url;
-            this.type = type;
-        }
-
-        @Override
-        public void onClick(@NonNull View widget) {
-            openLinkAction(type, url);
-        }
-
-        @Override
-        public void updateDrawState(@NonNull TextPaint ds) {
-            ds.setColor(ContextCompat.getColor(EditNoteActivity.this, R.color.text_primary));
-            ds.setUnderlineText(true);
-        }
-    }
-
     private void toggleChecklistMode() {
         if (!ensureEditableMode(null)) return;
         if (note.getType() == Note.TYPE_TEXT) {
@@ -1252,140 +1740,250 @@ public class EditNoteActivity extends AppCompatActivity {
     }
 
     private void populateNoteFromUi() {
-        note.setTitle(etTitle.getText().toString());
-        if (note.getType() == Note.TYPE_TEXT) {
-            note.setContent(etContent.getText().toString());
-        } else if (checklistAdapter != null) {
-            note.setChecklistItems(checklistAdapter.getItems());
-        }
+        // Capture UI data safely; may be called from background thread, so use try
+        try {
+            if (etTitle != null && etTitle.getText() != null) note.setTitle(etTitle.getText().toString());
+        } catch (Exception ignored) {}
+        try {
+            if (note.getType() == Note.TYPE_TEXT && etContent != null && etContent.getText() != null) {
+                note.setContent(etContent.getText().toString());
+            } else if (checklistAdapter != null) {
+                note.setChecklistItems(checklistAdapter.getItems());
+            }
+        } catch (Exception ignored) {}
         note.setTextSize(note.getTextSize());
     }
 
-    private boolean hasPendingChanges() {
-        populateNoteFromUi();
-        if (startedAsNew && note.getId() == 0) {
-            return !note.isEmpty() || dirty;
+    private void populateNoteFromUiInto(Note target, String title, String content, String checklistJson) {
+        target.setTitle(title != null ? title : "");
+        if (target.getType() == Note.TYPE_TEXT) {
+            target.setContent(content != null ? content : "");
+        } else if (checklistJson != null) {
+            target.setChecklistJson(checklistJson);
         }
-        return isNew
-                || !initialTitle.equals(note.getTitle())
-                || !initialContent.equals(note.getContent())
-                || !initialChecklistJson.equals(note.getChecklistJson())
-                || !initialAttachmentsJson.equals(note.getAttachmentsJson())
-                || initialColor != note.getColorIndex()
-                || initialCategoryId != note.getCategoryId()
-                || initialPinned != note.isPinned()
-                || initialFavorite != note.isFavorite()
-                || initialLocked != note.isLocked()
-                || initialReminder != note.getReminderAt()
-                || initialType != note.getType()
-                || initialTextSize != note.getTextSize()
-                || !pendingDeleteAttachmentFiles.isEmpty()
-                || dirty;
+        target.setTextSize(target.getTextSize());
     }
 
-    private boolean saveNote(boolean silent) {
-        populateNoteFromUi();
-        if (note.isEmpty()) {
-            // Новую пустую заметку — не создаём.
-            if (isNew) {
-                pendingDeleteAttachmentFiles.clear();
-                if (!silent) Snackbar.make(root, R.string.msg_empty_note, Snackbar.LENGTH_SHORT).show();
-                return false;
-            }
-            // Существующую заметку, ставшую пустой (после редактирования) — НЕ удаляем,
-            // а сохраняем как пустую. Удалением пусть управляет пользователь явно.
-            // При этом важно «дочистить» файлы вложений, которые юзер удалил.
-            if (!pendingDeleteAttachmentFiles.isEmpty()) {
-                DeleteFilesHelper.deleteFiles(this, new ArrayList<>(pendingDeleteAttachmentFiles));
-                pendingDeleteAttachmentFiles.clear();
-            }
-            repo.updateNote(note);
-            initialTitle = note.getTitle();
-            initialContent = note.getContent();
-            initialChecklistJson = note.getChecklistJson();
-            initialAttachmentsJson = note.getAttachmentsJson();
-            initialColor = note.getColorIndex();
-            initialCategoryId = note.getCategoryId();
-            initialPinned = note.isPinned();
-            initialFavorite = note.isFavorite();
-            initialLocked = note.isLocked();
-            initialReminder = note.getReminderAt();
-            initialType = note.getType();
-            initialTextSize = note.getTextSize();
-            dirty = false;
-            if (note.getReminderAt() > System.currentTimeMillis()) {
-                ReminderUtils.schedule(this, note.getId(), note.getReminderAt());
+    private boolean hasPendingChanges() {
+        // Lightweight version: avoid heavy toString unless dirty
+        // First check simple flags
+        if (dirty || !pendingDeleteAttachmentFiles.isEmpty()) return true;
+        if (startedAsNew && note.getId() == 0) {
+            // For new note, check if title/content non-empty without full populate
+            try {
+                String t = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : "";
+                String c = etContent != null && etContent.getText() != null ? etContent.getText().toString() : "";
+                if (!t.trim().isEmpty() || !c.trim().isEmpty()) return true;
+                if (note.getType() == Note.TYPE_CHECKLIST && checklistAdapter != null && !checklistAdapter.getItems().isEmpty()) {
+                    // Check if any item has text
+                    for (ChecklistItem it : checklistAdapter.getItems()) {
+                        if (it != null && it.text != null && !it.text.trim().isEmpty()) return true;
+                    }
+                }
+            } catch (Exception ignored) {}
+            return false;
+        }
+        try {
+            String curTitle = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : note.getTitle();
+            String curContent;
+            String curChecklist;
+            if (note.getType() == Note.TYPE_TEXT) {
+                curContent = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
+                curChecklist = initialChecklistJson;
             } else {
-                ReminderUtils.cancel(this, note.getId());
+                curContent = initialContent;
+                if (checklistAdapter != null) {
+                    curChecklist = ChecklistItem.toJson(checklistAdapter.getItems());
+                } else {
+                    curChecklist = note.getChecklistJson();
+                }
             }
-            if (!silent) Snackbar.make(root, R.string.msg_saved, Snackbar.LENGTH_SHORT).show();
-            return true;
+            if (!initialTitle.equals(curTitle)) return true;
+            if (note.getType() == Note.TYPE_TEXT && !initialContent.equals(curContent)) return true;
+            if (note.getType() == Note.TYPE_CHECKLIST && !initialChecklistJson.equals(curChecklist)) return true;
+            if (!initialAttachmentsJson.equals(note.getAttachmentsJson())) return true;
+            if (initialColor != note.getColorIndex()) return true;
+            if (initialCategoryId != note.getCategoryId()) return true;
+            if (initialPinned != note.isPinned()) return true;
+            if (initialFavorite != note.isFavorite()) return true;
+            if (initialLocked != note.isLocked()) return true;
+            if (initialReminder != note.getReminderAt()) return true;
+            if (initialType != note.getType()) return true;
+            if (initialTextSize != note.getTextSize()) return true;
+        } catch (Exception ignored) {
+            return dirty;
         }
-        boolean realChanged = isNew
-                || !initialTitle.equals(note.getTitle())
-                || !initialContent.equals(note.getContent())
-                || !initialChecklistJson.equals(note.getChecklistJson())
-                || !initialAttachmentsJson.equals(note.getAttachmentsJson())
-                || initialColor != note.getColorIndex()
-                || initialCategoryId != note.getCategoryId()
-                || initialPinned != note.isPinned()
-                || initialFavorite != note.isFavorite()
-                || initialLocked != note.isLocked()
-                || initialReminder != note.getReminderAt()
-                || initialType != note.getType()
-                || initialTextSize != note.getTextSize()
-                || dirty;
-        if (!realChanged) {
-            return true;
+        return false;
+    }
+
+    // Legacy sync saveNote now delegates to async to keep UI free
+    private boolean saveNote(boolean silent) {
+        // Capture current UI state
+        String title;
+        String content;
+        String checklistJson = null;
+        try {
+            title = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : note.getTitle();
+        } catch (Exception e) {
+            title = note.getTitle();
         }
-        if (isNew) {
-            repo.addNote(note);
-            isNew = false;
-            initialTitle = note.getTitle();
-            initialContent = note.getContent();
-            initialChecklistJson = note.getChecklistJson();
-            initialAttachmentsJson = note.getAttachmentsJson();
-        } else {
-            repo.updateNote(note);
+        try {
+            if (note.getType() == Note.TYPE_TEXT) {
+                content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
+            } else {
+                content = note.getContent();
+                if (checklistAdapter != null) {
+                    checklistJson = ChecklistItem.toJson(checklistAdapter.getItems());
+                }
+            }
+        } catch (Exception e) {
+            content = note.getContent();
         }
-        initialTitle = note.getTitle();
-        initialContent = note.getContent();
-        initialChecklistJson = note.getChecklistJson();
-        initialAttachmentsJson = note.getAttachmentsJson();
-        initialColor = note.getColorIndex();
-        initialCategoryId = note.getCategoryId();
-        initialPinned = note.isPinned();
-        initialFavorite = note.isFavorite();
-        initialLocked = note.isLocked();
-        initialReminder = note.getReminderAt();
-        initialType = note.getType();
-        initialTextSize = note.getTextSize();
-        dirty = false;
-        if (note.getReminderAt() > System.currentTimeMillis()) {
-            ReminderUtils.schedule(this, note.getId(), note.getReminderAt());
-        } else {
-            ReminderUtils.cancel(this, note.getId());
+
+        // Empty check
+        boolean isEmpty = (title == null || title.trim().isEmpty())
+                && (note.getType() == Note.TYPE_TEXT ? (content == null || content.trim().isEmpty()) : true)
+                && (note.getType() == Note.TYPE_CHECKLIST ? (checklistJson == null || checklistJson.equals("[]") || checklistJson.trim().isEmpty()) : true)
+                && note.getAttachments().isEmpty();
+
+        // For empty new note, just clear pending deletes
+        if (isEmpty && isNew) {
+            pendingDeleteAttachmentFiles.clear();
+            if (!silent && root != null) Snackbar.make(root, R.string.msg_empty_note, Snackbar.LENGTH_SHORT).show();
+            return false;
         }
-        if (!silent) Snackbar.make(root, R.string.msg_saved, Snackbar.LENGTH_SHORT).show();
-        flushPendingAttachmentDeletes();
+
+        final String finalTitle = title;
+        final String finalContent = content;
+        final String finalChecklistJson = checklistJson;
+        final boolean finalSilent = silent;
+
+        // Offload DB to diskIO, but update UI immediately for responsiveness
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            try {
+                // Update in-memory note
+                note.setTitle(finalTitle);
+                if (note.getType() == Note.TYPE_TEXT) {
+                    note.setContent(finalContent);
+                } else if (finalChecklistJson != null) {
+                    note.setChecklistJson(finalChecklistJson);
+                }
+
+                if (note.isEmpty()) {
+                    if (!isNew) {
+                        if (!pendingDeleteAttachmentFiles.isEmpty()) {
+                            DeleteFilesHelper.deleteFiles(EditNoteActivity.this, new ArrayList<>(pendingDeleteAttachmentFiles));
+                            mainHandler.post(() -> pendingDeleteAttachmentFiles.clear());
+                        }
+                        repo.updateNote(note);
+                    }
+                } else {
+                    if (isNew) {
+                        long newId = repo.addNote(note);
+                        mainHandler.post(() -> {
+                            if (note.getId() == 0) {
+                                note.setId(newId);
+                                isNew = false;
+                            }
+                        });
+                    } else {
+                        repo.updateNote(note);
+                    }
+                    mainHandler.post(() -> {
+                        flushPendingAttachmentDeletes();
+                    });
+                }
+
+                mainHandler.post(() -> {
+                    initialTitle = note.getTitle();
+                    initialContent = note.getContent();
+                    initialChecklistJson = note.getChecklistJson();
+                    initialAttachmentsJson = note.getAttachmentsJson();
+                    initialColor = note.getColorIndex();
+                    initialCategoryId = note.getCategoryId();
+                    initialPinned = note.isPinned();
+                    initialFavorite = note.isFavorite();
+                    initialLocked = note.isLocked();
+                    initialReminder = note.getReminderAt();
+                    initialType = note.getType();
+                    initialTextSize = note.getTextSize();
+                    lastSavedTitle = finalTitle;
+                    lastSavedContent = finalContent != null ? finalContent : "";
+                    dirty = false;
+                    try {
+                        if (note.getReminderAt() > System.currentTimeMillis()) {
+                            ReminderUtils.schedule(EditNoteActivity.this, note.getId(), note.getReminderAt());
+                        } else {
+                            ReminderUtils.cancel(EditNoteActivity.this, note.getId());
+                        }
+                    } catch (Exception ignored) {}
+                    if (!finalSilent && root != null) {
+                        Snackbar.make(root, R.string.msg_saved, Snackbar.LENGTH_SHORT).show();
+                    }
+                });
+            } catch (Exception e) {
+                try { android.util.Log.e("EditNote", "saveNote failed", e); } catch (Exception ignored) {}
+            }
+        });
+        // Optimistic return
         return true;
     }
 
     private void commitIfAutoSaveEnabled() {
         dirty = true;
-        if (!prefs.isConfirmSaveOnExitEnabled()) {
-            saveNote(true);
-        }
+        if (prefs.isConfirmSaveOnExitEnabled()) return;
+        // Debounced autosave instead of immediate save
+        scheduleAutosaveDebounced();
     }
 
     private void forceSaveNew() {
-        populateNoteFromUi();
-        if (isNew) {
-            repo.addNote(note);
-            isNew = false;
-        } else {
-            repo.updateNote(note);
-        }
+        // Capture UI quickly
+        String title;
+        String content;
+        try { title = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : ""; } catch (Exception e) { title = ""; }
+        try { content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : ""; } catch (Exception e) { content = ""; }
+        final String ft = title;
+        final String fc = content;
+        // For attachment flow, we need note ID synchronously? We will do blocking diskIO but on background? However startCopy expects ID immediately.
+        // So we do sync in diskIO but wait? To avoid UI thread DB, we will run on diskIO and post result? But original code needed ID before starting service.
+        // We implement synchronous save on diskIO thread but called from UI thread - we will do it via repo directly only if not large? For simplicity, keep old behavior but offload to allow UI to continue?
+        // To keep compatibility, we do immediate save on current thread only if small, otherwise we try to save synchronously in background and busy wait? Better to do sync save but in diskIO with latch.
+        // For minimal change, we keep sync save for this path because it's needed for attachment copy service to have ID.
+        // However we can still avoid UI lag by using AppExecutors but blocking with future for short time.
+        // We'll attempt async with latch.
+        final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        final long[] newIdHolder = new long[1];
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            try {
+                note.setTitle(ft);
+                if (note.getType() == Note.TYPE_TEXT) note.setContent(fc);
+                if (isNew) {
+                    long nid = repo.addNote(note);
+                    newIdHolder[0] = nid;
+                    mainHandler.post(() -> {
+                        if (note.getId() == 0) {
+                            note.setId(nid);
+                            isNew = false;
+                        }
+                    });
+                } else {
+                    repo.updateNote(note);
+                    newIdHolder[0] = note.getId();
+                }
+            } catch (Exception e) {
+                try { android.util.Log.e("EditNote", "forceSaveNew failed", e); } catch (Exception ignored) {}
+            } finally {
+                latch.countDown();
+            }
+        });
+        try {
+            // Wait max 2 seconds to get ID, avoid ANR for large text? 2 sec is okay.
+            latch.await(2000, java.util.concurrent.TimeUnit.MILLISECONDS);
+            if (newIdHolder[0] > 0 && note.getId() == 0) {
+                note.setId(newIdHolder[0]);
+                isNew = false;
+            }
+        } catch (InterruptedException ignored) {}
     }
 
     private void saveAndFinish() {
@@ -1414,46 +2012,137 @@ public class EditNoteActivity extends AppCompatActivity {
 
     private void saveAndExitNow() {
         suppressAutoSaveOnStop = true;
-        saveNote(true);
-        finish();
-        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+        cancelPendingRunnables();
+        // Capture UI data
+        String title;
+        String content;
+        String checklistJson = null;
+        try { title = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : note.getTitle(); } catch (Exception e) { title = note.getTitle(); }
+        try {
+            if (note.getType() == Note.TYPE_TEXT) {
+                content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
+            } else {
+                content = note.getContent();
+                if (checklistAdapter != null) checklistJson = ChecklistItem.toJson(checklistAdapter.getItems());
+            }
+        } catch (Exception e) { content = note.getContent(); }
+
+        final String ft = title;
+        final String fc = content;
+        final String fcl = checklistJson;
+
+        // Save off UI thread then finish
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            try {
+                note.setTitle(ft);
+                if (note.getType() == Note.TYPE_TEXT) note.setContent(fc);
+                else if (fcl != null) note.setChecklistJson(fcl);
+
+                if (!note.isEmpty()) {
+                    if (isNew) {
+                        repo.addNote(note);
+                    } else {
+                        repo.updateNote(note);
+                    }
+                    if (!pendingDeleteAttachmentFiles.isEmpty()) {
+                        DeleteFilesHelper.deleteFiles(EditNoteActivity.this, new ArrayList<>(pendingDeleteAttachmentFiles));
+                    }
+                    if (note.getReminderAt() > System.currentTimeMillis()) {
+                        ReminderUtils.schedule(EditNoteActivity.this, note.getId(), note.getReminderAt());
+                    } else {
+                        ReminderUtils.cancel(EditNoteActivity.this, note.getId());
+                    }
+                } else {
+                    if (!isNew && !pendingDeleteAttachmentFiles.isEmpty()) {
+                        DeleteFilesHelper.deleteFiles(EditNoteActivity.this, new ArrayList<>(pendingDeleteAttachmentFiles));
+                        repo.updateNote(note);
+                    }
+                }
+            } catch (Exception e) {
+                try { android.util.Log.e("EditNote", "saveAndExitNow failed", e); } catch (Exception ignored) {}
+            } finally {
+                mainHandler.post(() -> {
+                    finish();
+                    overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+                });
+            }
+        });
     }
 
     private void discardAndExitNow() {
         suppressAutoSaveOnStop = true;
-        restoreInitialSnapshotAndCleanup();
-        finish();
-        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+        cancelPendingRunnables();
+        // Offload restore to diskIO then finish
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            try {
+                restoreInitialSnapshotAndCleanupInternal();
+            } catch (Exception e) {
+                try { android.util.Log.e("EditNote", "discard failed", e); } catch (Exception ignored) {}
+            } finally {
+                mainHandler.post(() -> {
+                    finish();
+                    overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+                });
+            }
+        });
     }
 
-    private void restoreInitialSnapshotAndCleanup() {
+    private void restoreInitialSnapshotAndCleanupInternal() {
         try {
             if (note == null) return;
-            // Fix #3: flush pending attachment deletes that weren't committed
-            if (!pendingDeleteAttachmentFiles.isEmpty()) {
-                DeleteFilesHelper.deleteFiles(this, new ArrayList<>(pendingDeleteAttachmentFiles));
-                pendingDeleteAttachmentFiles.clear();
-            }
+            Set<String> initialFiles = toFileSet(initialAttachmentsJson);
+
             if (startedAsNew) {
+                List<String> allToDelete = new ArrayList<>();
                 if (note.getId() > 0) {
-                    List<String> files = repo.deleteForever(note.getId());
-                    DeleteFilesHelper.deleteFiles(this, files);
+                    Note dbNote = repo.getNoteById(note.getId());
+                    if (dbNote != null) {
+                        allToDelete.addAll(toFileSet(dbNote.getAttachmentsJson()));
+                    }
+                    List<String> dbFiles = repo.deleteForever(note.getId());
+                    for (String f : dbFiles) {
+                        if (!allToDelete.contains(f)) allToDelete.add(f);
+                    }
                 }
+                for (String f : pendingDeleteAttachmentFiles) {
+                    if (!allToDelete.contains(f)) allToDelete.add(f);
+                }
+                for (Attachment a : note.getAttachments()) {
+                    if (a.fileName != null && !initialFiles.contains(a.fileName) && !allToDelete.contains(a.fileName)) {
+                        allToDelete.add(a.fileName);
+                    }
+                }
+                DeleteFilesHelper.deleteFiles(this, allToDelete);
+                mainHandler.post(() -> pendingDeleteAttachmentFiles.clear());
                 if (pendingCameraFile != null && pendingCameraFile.exists()) {
-                    pendingCameraFile.delete();
+                    try { pendingCameraFile.delete(); } catch (Exception ignored) {}
                 }
                 return;
             }
+
             Note dbNote = repo.getNoteById(note.getId());
+            Set<String> currentFiles = new HashSet<>();
             if (dbNote != null) {
-                Set<String> initialFiles = toFileSet(initialAttachmentsJson);
-                Set<String> currentFiles = toFileSet(dbNote.getAttachmentsJson());
-                List<String> filesToDelete = new ArrayList<>();
-                for (String file : currentFiles) {
-                    if (!initialFiles.contains(file)) filesToDelete.add(file);
+                currentFiles = toFileSet(dbNote.getAttachmentsJson());
+            } else {
+                for (Attachment a : note.getAttachments()) {
+                    if (a.fileName != null) currentFiles.add(a.fileName);
                 }
+            }
+
+            List<String> filesToDelete = new ArrayList<>();
+            for (String f : currentFiles) {
+                if (!initialFiles.contains(f)) filesToDelete.add(f);
+            }
+            for (String f : pendingDeleteAttachmentFiles) {
+                if (!initialFiles.contains(f) && !filesToDelete.contains(f)) {
+                    filesToDelete.add(f);
+                }
+            }
+            if (!filesToDelete.isEmpty()) {
                 DeleteFilesHelper.deleteFiles(this, filesToDelete);
             }
+
             note.setTitle(initialTitle);
             note.setContent(initialContent);
             note.setChecklistJson(initialChecklistJson);
@@ -1467,9 +2156,18 @@ public class EditNoteActivity extends AppCompatActivity {
             note.setType(initialType);
             note.setTextSize(initialTextSize);
             repo.updateNote(note);
-            pendingDeleteAttachmentFiles.clear();
-            dirty = false;
-        } catch (Exception ignored) {}
+            mainHandler.post(() -> {
+                pendingDeleteAttachmentFiles.clear();
+                dirty = false;
+            });
+        } catch (Exception e) {
+            try { android.util.Log.e("EditNote", "restoreInternal failed", e); } catch (Exception ignored) {}
+        }
+    }
+
+    private void restoreInitialSnapshotAndCleanup() {
+        // Keep old method for compatibility but delegate to internal
+        restoreInitialSnapshotAndCleanupInternal();
     }
 
     private Set<String> toFileSet(String attachmentsJson) {
@@ -1559,47 +2257,84 @@ public class EditNoteActivity extends AppCompatActivity {
 
         aDuplicate.setOnClickListener(view -> {
             HapticUtils.light(view); sheet.dismiss();
-            populateNoteFromUi();
-            Note dup = new Note();
-            dup.setTitle(note.getTitle());
-            dup.setContent(note.getContent());
-            dup.setChecklistJson(note.getChecklistJson());
-            // Дублирование заметок происходит без копирования вложений по запросу пользователя,
-            // чтобы избежать дублирования имен файлов на диске и удаления оригинальных вложений.
-            dup.setAttachmentsJson("[]");
-            dup.setType(note.getType());
-            dup.setColorIndex(note.getColorIndex());
-            dup.setCategoryId(note.getCategoryId());
-            dup.setTextSize(note.getTextSize());
-            repo.addNote(dup);
-            Snackbar.make(root, R.string.msg_duplicated, Snackbar.LENGTH_SHORT).show();
+            // Capture UI data on UI thread
+            String title, content, checklistJson;
+            try { title = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : note.getTitle(); } catch (Exception e) { title = note.getTitle(); }
+            try {
+                if (note.getType() == Note.TYPE_TEXT) content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
+                else content = note.getContent();
+                checklistJson = checklistAdapter != null ? ChecklistItem.toJson(checklistAdapter.getItems()) : note.getChecklistJson();
+            } catch (Exception e) { content = note.getContent(); checklistJson = note.getChecklistJson(); }
+            final String ft = title, fc = content, fcl = checklistJson;
+            AppExecutors.getInstance().diskIO().execute(() -> {
+                try {
+                    Note dup = new Note();
+                    dup.setTitle(ft);
+                    dup.setContent(fc);
+                    dup.setChecklistJson(fcl);
+                    dup.setAttachmentsJson("[]");
+                    dup.setType(note.getType());
+                    dup.setColorIndex(note.getColorIndex());
+                    dup.setCategoryId(note.getCategoryId());
+                    dup.setTextSize(note.getTextSize());
+                    repo.addNote(dup);
+                    mainHandler.post(() -> {
+                        if (root != null) Snackbar.make(root, R.string.msg_duplicated, Snackbar.LENGTH_SHORT).show();
+                    });
+                } catch (Exception e) {
+                    try { android.util.Log.e("EditNote", "duplicate failed", e); } catch (Exception ignored) {}
+                }
+            });
         });
 
         aArchive.setOnClickListener(view -> {
             HapticUtils.light(view); sheet.dismiss();
             if (openedFromArchive) {
-                repo.unarchiveNote(note.getId());
-                Intent res = new Intent();
-                res.putExtra(RESULT_ACTION, ACTION_UNARCHIVED);
-                res.putExtra(RESULT_NOTE_ID, note.getId());
-                setResult(RESULT_OK, res);
-                finish();
-                overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+                AppExecutors.getInstance().diskIO().execute(() -> {
+                    try { repo.unarchiveNote(note.getId()); } catch (Exception ignored) {}
+                    mainHandler.post(() -> {
+                        Intent res = new Intent();
+                        res.putExtra(RESULT_ACTION, ACTION_UNARCHIVED);
+                        res.putExtra(RESULT_NOTE_ID, note.getId());
+                        setResult(RESULT_OK, res);
+                        finish();
+                        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+                    });
+                });
                 return;
             }
             if (note.isLocked()) {
                 Snackbar.make(root, getString(R.string.remove_protection_first), Snackbar.LENGTH_SHORT).show();
                 return;
             }
-            if (saveNote(true)) {
-                repo.archiveNote(note.getId());
-                Intent res = new Intent();
-                res.putExtra(RESULT_ACTION, ACTION_ARCHIVED);
-                res.putExtra(RESULT_NOTE_ID, note.getId());
-                setResult(RESULT_OK, res);
-            }
-            finish();
-            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+            // Save then archive off UI thread
+            String title, content, checklistJson;
+            try { title = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : note.getTitle(); } catch (Exception e) { title = note.getTitle(); }
+            try {
+                if (note.getType() == Note.TYPE_TEXT) content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
+                else content = note.getContent();
+                checklistJson = checklistAdapter != null ? ChecklistItem.toJson(checklistAdapter.getItems()) : note.getChecklistJson();
+            } catch (Exception e) { content = note.getContent(); checklistJson = note.getChecklistJson(); }
+            final String ft = title, fc = content, fcl = checklistJson;
+            AppExecutors.getInstance().diskIO().execute(() -> {
+                try {
+                    note.setTitle(ft);
+                    if (note.getType() == Note.TYPE_TEXT) note.setContent(fc);
+                    else if (fcl != null) note.setChecklistJson(fcl);
+                    if (!note.isEmpty()) repo.updateNote(note);
+                    repo.archiveNote(note.getId());
+                } catch (Exception e) {
+                    try { android.util.Log.e("EditNote", "archive failed", e); } catch (Exception ignored) {}
+                }
+                mainHandler.post(() -> {
+                    Intent res = new Intent();
+                    res.putExtra(RESULT_ACTION, ACTION_ARCHIVED);
+                    res.putExtra(RESULT_NOTE_ID, note.getId());
+                    setResult(RESULT_OK, res);
+                    finish();
+                    overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+                });
+            });
         });
 
         aConvert.setOnClickListener(view -> {
@@ -1645,13 +2380,17 @@ public class EditNoteActivity extends AppCompatActivity {
 
         aRestore.setOnClickListener(view -> {
             HapticUtils.light(view); sheet.dismiss();
-            repo.restoreFromTrash(note.getId());
-            Intent res = new Intent();
-            res.putExtra(RESULT_ACTION, ACTION_RESTORED);
-            res.putExtra(RESULT_NOTE_ID, note.getId());
-            setResult(RESULT_OK, res);
-            finish();
-            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+            AppExecutors.getInstance().diskIO().execute(() -> {
+                try { repo.restoreFromTrash(note.getId()); } catch (Exception ignored) {}
+                mainHandler.post(() -> {
+                    Intent res = new Intent();
+                    res.putExtra(RESULT_ACTION, ACTION_RESTORED);
+                    res.putExtra(RESULT_NOTE_ID, note.getId());
+                    setResult(RESULT_OK, res);
+                    finish();
+                    overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+                });
+            });
         });
 
         aFavorite.setOnClickListener(view -> {
@@ -1684,14 +2423,20 @@ public class EditNoteActivity extends AppCompatActivity {
                         getString(R.string.main_delete_note_forever_title),
                         getString(R.string.main_delete_note_forever_msg),
                         getString(R.string.delete), true, () -> {
-                            List<String> files = repo.deleteForever(note.getId());
-                            DeleteFilesHelper.deleteFiles(this, files);
-                            Intent res = new Intent();
-                            res.putExtra(RESULT_ACTION, ACTION_DELETED_FOREVER);
-                            res.putExtra(RESULT_NOTE_ID, note.getId());
-                            setResult(RESULT_OK, res);
-                            finish();
-                            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+                            AppExecutors.getInstance().diskIO().execute(() -> {
+                                List<String> files;
+                                try { files = repo.deleteForever(note.getId()); } catch (Exception e) { files = new ArrayList<>(); }
+                                List<String> finalFiles = files;
+                                mainHandler.post(() -> {
+                                    DeleteFilesHelper.deleteFiles(EditNoteActivity.this, finalFiles);
+                                    Intent res = new Intent();
+                                    res.putExtra(RESULT_ACTION, ACTION_DELETED_FOREVER);
+                                    res.putExtra(RESULT_NOTE_ID, note.getId());
+                                    setResult(RESULT_OK, res);
+                                    finish();
+                                    overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+                                });
+                            });
                         });
                 return;
             }
@@ -1703,15 +2448,24 @@ public class EditNoteActivity extends AppCompatActivity {
                     getString(R.string.confirm_delete_msg),
                     getString(R.string.delete), true, () -> {
                         if (!isNew) {
-                            repo.moveToTrash(note.getId());
-                            ReminderUtils.cancel(this, note.getId());
-                            Intent res = new Intent();
-                            res.putExtra(RESULT_ACTION, ACTION_TRASHED);
-                            res.putExtra(RESULT_NOTE_ID, note.getId());
-                            setResult(RESULT_OK, res);
+                            AppExecutors.getInstance().diskIO().execute(() -> {
+                                try {
+                                    repo.moveToTrash(note.getId());
+                                    ReminderUtils.cancel(EditNoteActivity.this, note.getId());
+                                } catch (Exception ignored) {}
+                                mainHandler.post(() -> {
+                                    Intent res = new Intent();
+                                    res.putExtra(RESULT_ACTION, ACTION_TRASHED);
+                                    res.putExtra(RESULT_NOTE_ID, note.getId());
+                                    setResult(RESULT_OK, res);
+                                    finish();
+                                    overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+                                });
+                            });
+                        } else {
+                            finish();
+                            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
                         }
-                        finish();
-                        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
                     });
         });
 
@@ -1859,40 +2613,53 @@ public class EditNoteActivity extends AppCompatActivity {
             Snackbar.make(root, getString(R.string.remove_protection_first), Snackbar.LENGTH_SHORT).show();
             return;
         }
-        BottomSheetDialog sheet = new BottomSheetDialog(this);
-        View v = LayoutInflater.from(this).inflate(R.layout.sheet_category_picker, null);
-        sheet.setContentView(v);
-        LinearLayout list = v.findViewById(R.id.cat_list);
-        LayoutInflater inf = LayoutInflater.from(this);
-        list.removeAllViews();
-        View none = inf.inflate(R.layout.item_category_pick, list, false);
-        ((TextView) none.findViewById(R.id.tv_name)).setText(R.string.no_category);
-        none.findViewById(R.id.v_dot).setVisibility(View.INVISIBLE);
-        none.findViewById(R.id.iv_check).setVisibility(note.getCategoryId() == 0 ? View.VISIBLE : View.INVISIBLE);
-        none.setOnClickListener(view -> {
-            HapticUtils.light(view);
-            note.setCategoryId(0);
-            updateCategoryLabel();
-            sheet.dismiss();
-        });
-        list.addView(none);
-        for (Category c : repo.getAllCategories()) {
-            View row = inf.inflate(R.layout.item_category_pick, list, false);
-            ((TextView) row.findViewById(R.id.tv_name)).setText(c.getName());
-            View dot = row.findViewById(R.id.v_dot);
-            GradientDrawable gd = (GradientDrawable) dot.getBackground().mutate();
-            gd.setColor(ColorUtils.getCategoryColor(this, c.getColorIndex()));
-            row.findViewById(R.id.iv_check).setVisibility(
-                    note.getCategoryId() == c.getId() ? View.VISIBLE : View.INVISIBLE);
-            row.setOnClickListener(view -> {
-                HapticUtils.light(view);
-                note.setCategoryId(c.getId());
-                updateCategoryLabel();
-                sheet.dismiss();
+        // Load categories off UI thread
+        AppExecutors.getInstance().diskIO().execute(() -> {
+            List<Category> cats;
+            try { cats = repo.getAllCategories(); } catch (Exception e) { cats = new ArrayList<>(); }
+            List<Category> finalCats = cats;
+            mainHandler.post(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                BottomSheetDialog sheet = new BottomSheetDialog(EditNoteActivity.this);
+                View v = LayoutInflater.from(EditNoteActivity.this).inflate(R.layout.sheet_category_picker, null);
+                sheet.setContentView(v);
+                LinearLayout list = v.findViewById(R.id.cat_list);
+                LayoutInflater inf = LayoutInflater.from(EditNoteActivity.this);
+                list.removeAllViews();
+                View none = inf.inflate(R.layout.item_category_pick, list, false);
+                ((TextView) none.findViewById(R.id.tv_name)).setText(R.string.no_category);
+                none.findViewById(R.id.v_dot).setVisibility(View.INVISIBLE);
+                none.findViewById(R.id.iv_check).setVisibility(note.getCategoryId() == 0 ? View.VISIBLE : View.INVISIBLE);
+                none.setOnClickListener(view -> {
+                    HapticUtils.light(view);
+                    note.setCategoryId(0);
+                    tvCategory.setText(R.string.no_category);
+                    sheet.dismiss();
+                    dirty = true;
+                    scheduleAutosaveDebounced();
+                });
+                list.addView(none);
+                for (Category c : finalCats) {
+                    View row = inf.inflate(R.layout.item_category_pick, list, false);
+                    ((TextView) row.findViewById(R.id.tv_name)).setText(c.getName());
+                    View dot = row.findViewById(R.id.v_dot);
+                    GradientDrawable gd = (GradientDrawable) dot.getBackground().mutate();
+                    gd.setColor(ColorUtils.getCategoryColor(EditNoteActivity.this, c.getColorIndex()));
+                    row.findViewById(R.id.iv_check).setVisibility(
+                            note.getCategoryId() == c.getId() ? View.VISIBLE : View.INVISIBLE);
+                    row.setOnClickListener(view -> {
+                        HapticUtils.light(view);
+                        note.setCategoryId(c.getId());
+                        tvCategory.setText(c.getName());
+                        sheet.dismiss();
+                        dirty = true;
+                        scheduleAutosaveDebounced();
+                    });
+                    list.addView(row);
+                }
+                sheet.show();
             });
-            list.addView(row);
-        }
-        sheet.show();
+        });
     }
 
     private void showReminderSheet() {
@@ -2051,7 +2818,7 @@ public class EditNoteActivity extends AppCompatActivity {
                 }
             }
             Intent i = new Intent(this, ImageViewerActivity.class);
-            i.putExtra("images", imgList);
+            i.putParcelableArrayListExtra("images", imgList);
             i.putExtra("index", clickedIdx);
             i.putExtra("note_id", note.getId());
             startActivity(i);
@@ -2071,7 +2838,7 @@ public class EditNoteActivity extends AppCompatActivity {
                 }
             }
             Intent i = new Intent(this, AudioPlayerActivity.class);
-            i.putExtra("audios", audioList);
+            i.putParcelableArrayListExtra("audios", audioList);
             i.putExtra("index", clickedIdx);
             i.putExtra("note_id", note.getId());
             startActivity(i);
@@ -2091,7 +2858,7 @@ public class EditNoteActivity extends AppCompatActivity {
                 }
             }
             Intent i = new Intent(this, VideoPlayerActivity.class);
-            i.putExtra("videos", videoList);
+            i.putParcelableArrayListExtra("videos", videoList);
             i.putExtra("index", clickedIdx);
             i.putExtra("note_id", note.getId());
             startActivity(i);
@@ -2115,16 +2882,11 @@ public class EditNoteActivity extends AppCompatActivity {
                 i.setDataAndType(uri, "application/vnd.android.package-archive");
                 i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                
-                if (hasRequestInstallPermission()) {
-                    // Разрешение REQUEST_INSTALL_PACKAGES есть в Манифесте (для твоей личной сборки)
-                    startActivity(i);
-                } else {
-                    // Разрешения нет в Манифесте (для Google Play сборки) — запускаем системный Chooser выбора приложений!
-                    Intent chooser = Intent.createChooser(i, "Открыть APK с помощью");
-                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(chooser);
-                }
+                // Для соответствия Google Play не используем REQUEST_INSTALL_PACKAGES,
+                // открываем через системный chooser
+                Intent chooser = Intent.createChooser(i, "Открыть APK с помощью");
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(chooser);
             } catch (Exception e) {
                 Snackbar.make(root, "Ошибка при запуске установки: " + e.getLocalizedMessage(), Snackbar.LENGTH_LONG).show();
             }
@@ -2455,7 +3217,7 @@ public class EditNoteActivity extends AppCompatActivity {
                 @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
                 @Override public void afterTextChanged(Editable s) {
                     if (!isFindMode) return;
-                    performFind(s == null ? "" : s.toString(), false);
+                    scheduleSearchDebounced(s == null ? "" : s.toString(), false);
                 }
             });
         }
@@ -2485,6 +3247,60 @@ public class EditNoteActivity extends AppCompatActivity {
         }
     }
 
+    private void scheduleSearchDebounced(String query, boolean showMessage) {
+        if (pendingSearchRunnable != null) {
+            mainHandler.removeCallbacks(pendingSearchRunnable);
+        }
+        final int gen = ++searchGeneration;
+        pendingSearchRunnable = () -> {
+            if (gen != searchGeneration) return;
+            if (!isFindMode) return;
+            if (isLargeTextMode() || (etContent != null && etContent.getText() != null && etContent.getText().length() > 50000)) {
+                final String q = query;
+                final boolean sm = showMessage;
+                AppExecutors.getInstance().diskIO().execute(() -> {
+                    if (gen != searchGeneration) return;
+                    List<Integer> indices = new ArrayList<>();
+                    try {
+                        if (etContent != null && etContent.getText() != null) {
+                            String text = etContent.getText().toString();
+                            if (!q.trim().isEmpty() && !text.isEmpty()) {
+                                String lowerQ = q.toLowerCase(Locale.getDefault());
+                                String lowerSrc = text.toLowerCase(Locale.getDefault());
+                                int len = lowerQ.length();
+                                int idx = lowerSrc.indexOf(lowerQ);
+                                while (idx >= 0 && indices.size() < MAX_SEARCH_MATCHES) {
+                                    indices.add(idx);
+                                    idx = lowerSrc.indexOf(lowerQ, idx + len);
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                    List<Integer> finalIndices = indices;
+                    mainHandler.post(() -> {
+                        if (gen != searchGeneration) return;
+                        if (!isFindMode) return;
+                        searchIndices.clear();
+                        searchIndices.addAll(finalIndices);
+                        currentSearchIndex = searchIndices.isEmpty() ? -1 : 0;
+                        if (tvSearchCount != null) {
+                            tvSearchCount.setText(searchIndices.isEmpty() ? "0/0" : "1/" + searchIndices.size());
+                        }
+                        if (!searchIndices.isEmpty()) {
+                            highlightMatchesAndScroll();
+                        } else {
+                            clearFindHighlight();
+                            if (sm && root != null) Snackbar.make(root, getString(R.string.search_no_matches), Snackbar.LENGTH_SHORT).show();
+                        }
+                    });
+                });
+            } else {
+                performFind(query, showMessage);
+            }
+        };
+        mainHandler.postDelayed(pendingSearchRunnable, SEARCH_DEBOUNCE);
+    }
+
     private void toggleFindMode() {
         if (!ensureEditableMode(null)) return;
         if (note.getType() != Note.TYPE_TEXT) {
@@ -2496,9 +3312,14 @@ public class EditNoteActivity extends AppCompatActivity {
             return;
         }
         isFindMode = true;
+        searchIndices.clear();
+        currentSearchIndex = -1;
+        activeSearchSpans.clear();
         if (bottomActionsRow != null) bottomActionsRow.setVisibility(View.GONE);
         if (searchBarRow != null) searchBarRow.setVisibility(View.VISIBLE);
+        if (tvSearchCount != null) tvSearchCount.setText("0/0");
         if (etFindInline != null) {
+            etFindInline.setText("");
             etFindInline.requestFocus();
             android.view.inputmethod.InputMethodManager imm =
                     (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
@@ -2508,7 +3329,14 @@ public class EditNoteActivity extends AppCompatActivity {
 
     private void exitFindMode() {
         isFindMode = false;
+        searchGeneration++;
+        if (pendingSearchRunnable != null) {
+            mainHandler.removeCallbacks(pendingSearchRunnable);
+            pendingSearchRunnable = null;
+        }
         clearFindHighlight();
+        searchIndices.clear();
+        currentSearchIndex = -1;
         if (searchBarRow != null) searchBarRow.setVisibility(View.GONE);
         if (etFindInline != null) etFindInline.setText("");
         updateReadModeUi();
@@ -2566,7 +3394,7 @@ public class EditNoteActivity extends AppCompatActivity {
         int len = q.length();
 
         int idx = src.indexOf(q);
-        while (idx >= 0) {
+        while (idx >= 0 && searchIndices.size() < MAX_SEARCH_MATCHES) {
             searchIndices.add(idx);
             idx = src.indexOf(q, idx + len);
         }
@@ -2604,40 +3432,45 @@ public class EditNoteActivity extends AppCompatActivity {
         Editable editable = etContent.getText();
         if (editable == null) return;
 
-        // Clear existing highlights
         clearFindHighlight();
 
-        String query = etFindInline.getText().toString();
+        String query = etFindInline != null && etFindInline.getText() != null ? etFindInline.getText().toString() : "";
         int queryLen = query.length();
+        if (queryLen == 0) return;
 
-        // Highlight all matches
-        for (int i = 0; i < searchIndices.size(); i++) {
+        boolean large = isLargeTextMode();
+        int startIdx = large ? currentSearchIndex : 0;
+        int endIdx = large ? currentSearchIndex + 1 : searchIndices.size();
+
+        for (int i = startIdx; i < endIdx && i < searchIndices.size(); i++) {
             int start = searchIndices.get(i);
             int end = start + queryLen;
-            if (end > editable.length()) continue;
-
-            int color = (i == currentSearchIndex) 
-                ? 0xFFD4AF37 // Brighter Gold for active match
-                : 0x5543A047; // Subtle green/gold for other matches
-
-            editable.setSpan(new BackgroundColorSpan(color), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            if (end > editable.length() || start < 0) continue;
+            int color;
+            if (i == currentSearchIndex) {
+                try { color = ContextCompat.getColor(EditNoteActivity.this, R.color.gold_primary); }
+                catch (Exception e) { color = 0xFFD4AF37; }
+            } else {
+                color = 0x5543A047;
+            }
+            BackgroundColorSpan span = new BackgroundColorSpan(color);
+            editable.setSpan(span, start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            activeSearchSpans.add(span);
         }
 
-        // Scroll to active match!
         final int activeOffset = searchIndices.get(currentSearchIndex);
         if (scrollContent != null) {
             scrollContent.post(() -> {
-                Layout layout = etContent.getLayout();
-                if (layout != null) {
-                    int line = layout.getLineForOffset(activeOffset);
-                    int y = layout.getLineTop(line);
-                    
-                    // Get the Y position of the EditText relative to scrollContent
-                    int etY = etContent.getTop();
-                    int targetScrollY = Math.max(0, etY + y - scrollContent.getHeight() / 3);
-                    
-                    scrollContent.smoothScrollTo(0, targetScrollY);
-                }
+                try {
+                    Layout layout = etContent.getLayout();
+                    if (layout != null) {
+                        int line = layout.getLineForOffset(activeOffset);
+                        int y = layout.getLineTop(line);
+                        int etY = etContent.getTop();
+                        int targetScrollY = Math.max(0, etY + y - scrollContent.getHeight() / 3);
+                        scrollContent.smoothScrollTo(0, targetScrollY);
+                    }
+                } catch (Exception ignored) {}
             });
         }
     }
@@ -2656,16 +3489,21 @@ public class EditNoteActivity extends AppCompatActivity {
         String text = etContent.getText() == null ? "" : etContent.getText().toString();
         if (text.isEmpty()) return 0;
         String repl = replacement == null ? "" : replacement;
-        // Case-insensitive search & replace to match performFind behavior
         String lowerText = text.toLowerCase(Locale.getDefault());
         String lowerQuery = query.toLowerCase(Locale.getDefault());
         int count = 0;
         int idx = lowerText.indexOf(lowerQuery);
-        while (idx >= 0) {
+        while (idx >= 0 && count < MAX_SEARCH_MATCHES) {
             count++;
             idx = lowerText.indexOf(lowerQuery, idx + query.length());
         }
         if (count == 0) return 0;
+        try {
+            int curS = etContent.getSelectionStart();
+            int curE = etContent.getSelectionEnd();
+            pushUndo(text, curS, curE, getCurrentScrollY());
+            redoStack.clear();
+        } catch (Exception ignored) {}
         StringBuilder sb = new StringBuilder(text.length());
         int last = 0;
         int searchIdx = lowerText.indexOf(lowerQuery);
@@ -2678,21 +3516,46 @@ public class EditNoteActivity extends AppCompatActivity {
         sb.append(text.substring(last));
         String replaced = sb.toString();
         ignoreTextChange = true;
-        etContent.setText(replaced);
-        etContent.setSelection(Math.min(replaced.length(), etContent.getText().length()));
-        lastContent = replaced;
-        ignoreTextChange = false;
+        try {
+            etContent.setText(replaced);
+            try {
+                int first = lowerText.indexOf(lowerQuery);
+                int pos = first >= 0 ? first : 0;
+                etContent.setSelection(Math.min(pos, replaced.length()));
+                lastSelStart = pos;
+                lastSelEnd = pos;
+                lastScrollY = 0;
+            } catch (Exception e) {
+                etContent.setSelection(0);
+            }
+            lastContent = replaced;
+        } finally {
+            ignoreTextChange = false;
+        }
         dirty = true;
+        scheduleAutosaveDebounced();
+        updateUndoButtons();
         return count;
     }
 
     private void clearFindHighlight() {
         if (etContent == null || etContent.getText() == null) return;
-        Editable editable = etContent.getText();
-        BackgroundColorSpan[] spans = editable.getSpans(0, editable.length(), BackgroundColorSpan.class);
-        for (BackgroundColorSpan span : spans) {
-            editable.removeSpan(span);
-        }
+        try {
+            Editable editable = etContent.getText();
+            if (!activeSearchSpans.isEmpty()) {
+                for (BackgroundColorSpan span : activeSearchSpans) {
+                    try { editable.removeSpan(span); } catch (Exception ignored) {}
+                }
+                activeSearchSpans.clear();
+            } else {
+                if (editable.length() < 50000) {
+                    BackgroundColorSpan[] spans = editable.getSpans(0, editable.length(), BackgroundColorSpan.class);
+                    for (BackgroundColorSpan span : spans) {
+                        try { editable.removeSpan(span); } catch (Exception ignored) {}
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     private void readNoteAloud() {
@@ -2814,7 +3677,28 @@ public class EditNoteActivity extends AppCompatActivity {
             registerReceiver(progressReceiver, new IntentFilter(AttachmentCopyService.ACTION_PROGRESS),
                     Build.VERSION.SDK_INT >= 33 ? Context.RECEIVER_NOT_EXPORTED : 0);
         } catch (Exception ignored) {}
-        if (uiReady && attachmentsAdapter != null && note != null && !isNew) syncAttachmentsFromDb();
+        if (uiReady && attachmentsAdapter != null && note != null && !isNew) {
+            // Async sync to avoid DB on UI thread
+            AppExecutors.getInstance().diskIO().execute(() -> {
+                try {
+                    Note fresh = repo.getNoteById(note.getId());
+                    if (fresh != null) {
+                        List<Attachment> merged = fresh.getAttachments();
+                        if (!pendingDeleteAttachmentFiles.isEmpty()) {
+                            merged.removeIf(att -> att != null
+                                    && att.fileName != null
+                                    && pendingDeleteAttachmentFiles.contains(att.fileName));
+                        }
+                        mainHandler.post(() -> {
+                            if (note != null) {
+                                note.setAttachments(merged);
+                                reloadAttachments();
+                            }
+                        });
+                    }
+                } catch (Exception ignored) {}
+            });
+        }
         if (!AttachmentCopyService.PENDING.containsKey(note != null ? note.getId() : 0L)
                 && progressBar != null) {
             progressBar.setVisibility(View.GONE);
@@ -2822,8 +3706,6 @@ public class EditNoteActivity extends AppCompatActivity {
         }
         if (uiReady) {
             readModeFeatureEnabled = prefs.isEditorReadModeEnabled();
-            activeLinksEnabled = prefs.isActiveLinksEnabled();
-            applyContentLinks();
             if (!readModeFeatureEnabled && readMode) setReadMode(false, false);
             else updateReadModeUi();
         }
@@ -2838,19 +3720,31 @@ public class EditNoteActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
-        if (suppressAutoSaveOnStop) return;
+        if (suppressAutoSaveOnStop) {
+            cancelPendingRunnables();
+            return;
+        }
         if (!uiReady || note == null) return;
         if (prefs.isConfirmSaveOnExitEnabled()) return;
         if (copyInProgress) return;
         try {
-            saveNote(true);
+            // Use async autosave, not sync saveNote
+            if (dirty) performAutosaveAsync();
         } catch (Exception ignored) {}
     }
 
     @Override
     protected void onDestroy() {
+        cancelPendingRunnables();
         stopReadAloud();
-        clearFindHighlight();
+        // Avoid heavy clearFindHighlight which iterates spans on huge doc; do lightweight
+        try {
+            if (etContent != null && etContent.getText() != null) {
+                // Only clear our search spans, but avoid full scan if large
+                // clearFindHighlight already does getSpans, but we call it only if in find mode
+                if (isFindMode) clearFindHighlight();
+            }
+        } catch (Exception ignored) {}
         if (tts != null) {
             try {
                 tts.shutdown();
@@ -2860,18 +3754,4 @@ public class EditNoteActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    private boolean hasRequestInstallPermission() {
-        try {
-            android.content.pm.PackageInfo info = getPackageManager().getPackageInfo(
-                    getPackageName(), android.content.pm.PackageManager.GET_PERMISSIONS);
-            if (info.requestedPermissions != null) {
-                for (String p : info.requestedPermissions) {
-                    if ("android.permission.REQUEST_INSTALL_PACKAGES".equals(p)) {
-                        return true;
-                    }
-                }
-            }
-        } catch (Exception ignored) {}
-        return false;
-    }
 }

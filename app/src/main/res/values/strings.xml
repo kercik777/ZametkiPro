@@ -126,8 +126,6 @@
     <string name="settings_read_mode_disabled_msg">Теперь заметки будут сразу открываться в режиме редактирования</string>
     <string name="settings_confirm_delete">Подтверждать удаление</string>
     <string name="settings_show_date">Показывать дату</string>
-    <string name="settings_active_links">Активные ссылки</string>
-    <string name="settings_active_links_desc">Делать ссылки в тексте активными</string>
     <string name="settings_data">Данные</string>
     <string name="settings_clear_all">Очистить все данные</string>
     <string name="settings_clear_summary">Удаление всех заметок и категорий</string>
@@ -246,11 +244,7 @@
     <string name="category_edit_lock_title">Защитить паролем</string>
     <string name="category_edit_lock_desc">Требуется пароль/отпечаток для просмотра</string>
     <string name="sheet_info_title_note">Информация о заметке</string>
-    <string name="link_type_email">Почта</string>
-    <string name="link_type_phone">Номер телефона</string>
-    <string name="link_type_web">Ссылка</string>
     <string name="open">Открыть</string>
-    <string name="link_open_failed">Не удалось открыть ссылку</string>
     <string name="sheet_read_aloud">Прочитать вслух</string>
     <string name="sheet_add_favorite">Добавить в избранное</string>
     <string name="sheet_remove_favorite">Убрать из избранного</string>
@@ -405,6 +399,11 @@
     <string name="edit_note_protection_removed">Защита снята</string>
     <string name="edit_note_locked_note_title">Защищённая заметка</string>
     <string name="edit_note_copying_files_title">Копирование файлов</string>
+    <string name="edit_note_copy_success">Скопировано: %1$d</string>
+    <string name="edit_note_copy_partial">Скопировано: %1$d, не удалось: %2$d</string>
+    <string name="edit_note_copy_cancelled">Копирование отменено</string>
+    <string name="edit_note_copy_failed">Не удалось скопировать файлы</string>
+    <string name="edit_note_copy_file_failed">Не удалось скопировать файл: %1$s</string>
     <string name="edit_note_not_saving">Не сохранять</string>
     <string name="edit_note_prepare_copy">Подготовка к копированию…</string>
     <string name="edit_note_wait">Подождать</string>
@@ -446,6 +445,10 @@
     <string name="service_copy_files_text">Копирование файлов…</string>
     <string name="service_copy_progress">Копирование: %1$s</string>
     <string name="service_copy_broken">сломанные</string>
+    <string name="service_copy_done">Скопировано: %1$d</string>
+    <string name="service_copy_partial">Скопировано: %1$d, не удалось: %2$d</string>
+    <string name="service_copy_cancelled">Копирование отменено</string>
+    <string name="service_copy_failed">Не удалось скопировать файлы</string>
     <string name="service_delete_files_title">Удаление файлов</string>
     <string name="service_delete_files_text">Удаление файлов…</string>
     <string name="service_delete_done">Удалено: %1$d</string>
