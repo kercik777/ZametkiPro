@@ -1391,8 +1391,7 @@ public class EditNoteActivity extends AppCompatActivity {
             activeBatchAction.afterSelEnd = afterSelEnd;
             activeBatchAction.afterScrollY = afterScrollY;
 
-            if (actionType == EditAction.ACTION_INSERT && after == 1 && start < afterText.length() && afterText.charAt(start) == '
-') {
+            if (actionType == EditAction.ACTION_INSERT && after == 1 && start < afterText.length() && afterText.charAt(start) == '\n') {
                 finalizeActiveBatch();
             } else {
                 scheduleBatchFinalizeDebounced();
@@ -1418,8 +1417,7 @@ public class EditNoteActivity extends AppCompatActivity {
 
             if (actionType != EditAction.ACTION_REPLACE) {
                 activeBatchAction = newAction;
-                if (actionType == EditAction.ACTION_INSERT && after == 1 && start < afterText.length() && afterText.charAt(start) == '
-') {
+                if (actionType == EditAction.ACTION_INSERT && after == 1 && start < afterText.length() && afterText.charAt(start) == '\n') {
                     finalizeActiveBatch();
                 } else {
                     scheduleBatchFinalizeDebounced();
