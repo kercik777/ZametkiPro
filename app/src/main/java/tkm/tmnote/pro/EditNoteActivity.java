@@ -27,6 +27,7 @@ import android.text.method.ArrowKeyMovementMethod;
 import android.text.method.KeyListener;
 import android.text.style.BackgroundColorSpan;
 import android.speech.tts.TextToSpeech;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
@@ -143,45 +144,57 @@ public class EditNoteActivity extends AppCompatActivity {
     public static Note fastOpenCache = null;
     public static long fastOpenCacheId = -1;
 
-    private static class UndoState {
-        final String text;
-        final int selStart;
-        final int selEnd;
-        final int scrollY;
-        final int etScrollY;
-        UndoState(String t, int s, int e, int y, int etY) { text = t; selStart = s; selEnd = e; scrollY = y; etScrollY = etY; }
-        UndoState(String t, int s, int e, int y) { this(t, s, e, y, 0); }
+    private static class EditAction {
+        static final int TARGET_CONTENT = 0;
+        static final int TARGET_TITLE = 1;
+
+        static final int ACTION_INSERT = 1;
+        static final int ACTION_DELETE = 2;
+        static final int ACTION_REPLACE = 3;
+
+        final int target;
+        final String beforeText;
+        String afterText;
+        final int beforeSelStart;
+        final int beforeSelEnd;
+        int afterSelStart;
+        int afterSelEnd;
+        final int beforeScrollY;
+        int afterScrollY;
+        final int actionType;
+
+        EditAction(int target, String beforeText, String afterText,
+                   int beforeSelStart, int beforeSelEnd,
+                   int afterSelStart, int afterSelEnd,
+                   int beforeScrollY, int afterScrollY,
+                   int actionType) {
+            this.target = target;
+            this.beforeText = beforeText != null ? beforeText : "";
+            this.afterText = afterText != null ? afterText : "";
+            this.beforeSelStart = beforeSelStart;
+            this.beforeSelEnd = beforeSelEnd;
+            this.afterSelStart = afterSelStart;
+            this.afterSelEnd = afterSelEnd;
+            this.beforeScrollY = beforeScrollY;
+            this.afterScrollY = afterScrollY;
+            this.actionType = actionType;
+        }
     }
-    private final Deque<UndoState> undoStack = new ArrayDeque<>();
-    private final Deque<UndoState> redoStack = new ArrayDeque<>();
+
+    private final Deque<EditAction> undoStack = new ArrayDeque<>();
+    private final Deque<EditAction> redoStack = new ArrayDeque<>();
+    private EditAction activeBatchAction = null;
+    private Runnable pendingFinalizeBatchRunnable = null;
+    private static final long BATCH_FINALIZE_DELAY = 600L;
     private boolean ignoreTextChange = false;
-    private String lastContent = "";
-    private int lastSelStart = 0;
-    private int lastSelEnd = 0;
-    private int lastBeforeSelStart = 0;
-    private int lastBeforeSelEnd = 0;
-    private int lastScrollY = 0;
-    private int lastBeforeScrollY = 0;
     private View contentContainer;
-    // Batch tracking for fast undo button activation (fix slow 🦥)
-    private boolean undoBatchActive = false;
-    private String undoBatchStartText = null;
-    private int undoBatchStartSelStart = 0;
-    private int undoBatchStartSelEnd = 0;
-    private int undoBatchStartScrollY = 0;
-    private int undoBatchStartEtScrollY = 0;
 
     // --- Large-text optimization fields ---
     private static final int LARGE_TEXT_THRESHOLD = 20000;
     private static final long AUTOSAVE_DELAY_SMALL = 1500L;
     private static final long AUTOSAVE_DELAY_LARGE = 2500L;
-    private static final long UNDO_DEBOUNCE_DELAY = 400L;
-    private static final long UNDO_DEBOUNCE_DELAY_LARGE = 800L;
-    private static final int MAX_UNDO_STACK = 20;
-    private static final int UNDO_IMMEDIATE_THRESHOLD = 200;
 
     private final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-    private Runnable pendingUndoRunnable;
     private Runnable pendingAutosaveRunnable;
     private int autosaveGeneration = 0;
     private volatile boolean isAutosaveInProgress = false;
@@ -402,7 +415,6 @@ public class EditNoteActivity extends AppCompatActivity {
                                             etTitle.setText(initialTitle);
                                             if (note.getType() == Note.TYPE_TEXT) {
                                                 etContent.setText(initialContent != null ? initialContent : "", TextView.BufferType.EDITABLE);
-                                                lastContent = initialContent != null ? initialContent : "";
                                                 try {
                                                     int len = etContent.getText() != null ? etContent.getText().length() : 0;
                                                     etContent.setSelection(Math.min(selStart, len));
@@ -635,12 +647,8 @@ public class EditNoteActivity extends AppCompatActivity {
             try {
                 String content = initialContent != null ? initialContent : "";
                 etContent.setText(content, TextView.BufferType.EDITABLE);
-                lastContent = content;
-                lastSelStart = 0;
-                lastSelEnd = 0;
             } catch (Exception e) {
                 etContent.setText("");
-                lastContent = "";
             }
             showTextMode();
         } else {
@@ -707,69 +715,119 @@ public class EditNoteActivity extends AppCompatActivity {
 
         updatePinFav();
 
-        // Title TextWatcher: lightweight, only mark dirty and schedule autosave
+        // Title TextWatcher
         etTitle.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+            private String beforeStr = "";
+            private int beforeSelStart = 0;
+            private int beforeSelEnd = 0;
+            private int changeStart = 0;
+            private int changeCount = 0;
+            private int changeAfter = 0;
+
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                if (ignoreTextChange) return;
+                beforeStr = s != null ? s.toString() : "";
+                try {
+                    beforeSelStart = etTitle.getSelectionStart();
+                    beforeSelEnd = etTitle.getSelectionEnd();
+                } catch (Exception e) {
+                    beforeSelStart = start;
+                    beforeSelEnd = start;
+                }
+                changeStart = start;
+                changeCount = count;
+                changeAfter = after;
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
                 if (ignoreTextChange) return;
                 dirty = true;
                 scheduleAutosaveDebounced();
             }
-            @Override public void afterTextChanged(Editable s) {}
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (ignoreTextChange) return;
+                String afterStr = s != null ? s.toString() : "";
+                int afterSelStart = etTitle.getSelectionStart();
+                int afterSelEnd = etTitle.getSelectionEnd();
+
+                onEditTextChanged(
+                        EditAction.TARGET_TITLE,
+                        beforeStr,
+                        afterStr,
+                        beforeSelStart,
+                        beforeSelEnd,
+                        afterSelStart,
+                        afterSelEnd,
+                        0,
+                        0,
+                        changeStart,
+                        changeCount,
+                        changeAfter
+                );
+            }
         });
 
+        // Content TextWatcher
         etContent.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            private String beforeStr = "";
+            private int beforeSelStart = 0;
+            private int beforeSelEnd = 0;
+            private int beforeScrollY = 0;
+            private int changeStart = 0;
+            private int changeCount = 0;
+            private int changeAfter = 0;
+
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
                 if (ignoreTextChange) return;
-                beforeTextChangeStart = start;
-                beforeTextChangeCount = count;
-                int afterLen = after;
-                int delta = Math.max(count, afterLen);
-                beforeTextChangeWasLarge = delta > UNDO_IMMEDIATE_THRESHOLD;
+                beforeStr = s != null ? s.toString() : "";
                 try {
-                    lastBeforeSelStart = etContent.getSelectionStart();
-                    lastBeforeSelEnd = etContent.getSelectionEnd();
-                    lastBeforeScrollY = getCurrentScrollY();
-                    lastScrollY = lastBeforeScrollY;
+                    beforeSelStart = etContent.getSelectionStart();
+                    beforeSelEnd = etContent.getSelectionEnd();
                 } catch (Exception e) {
-                    lastBeforeSelStart = start;
-                    lastBeforeSelEnd = start;
-                    lastBeforeScrollY = getCurrentScrollY();
+                    beforeSelStart = start;
+                    beforeSelEnd = start;
                 }
-                int etY = getCurrentEtScrollY();
-                if (beforeTextChangeWasLarge) {
-                    // Large paste/delete -> immediate undo push, clear batch for fast button
-                    pushUndo(s != null ? s.toString() : lastContent, lastBeforeSelStart, lastBeforeSelEnd, lastBeforeScrollY, etY);
-                    redoStack.clear();
-                    undoBatchActive = false;
-                    undoBatchStartText = null;
-                    if (pendingUndoRunnable != null) {
-                        mainHandler.removeCallbacks(pendingUndoRunnable);
-                        pendingUndoRunnable = null;
-                    }
-                    updateUndoButtons();
-                } else {
-                    // Small typing: start batch on first char, push immediately so button becomes active instantly (fix 🦥)
-                    if (!undoBatchActive) {
-                        undoBatchActive = true;
-                        undoBatchStartText = s != null ? s.toString() : lastContent;
-                        undoBatchStartSelStart = lastBeforeSelStart;
-                        undoBatchStartSelEnd = lastBeforeSelEnd;
-                        undoBatchStartScrollY = lastBeforeScrollY;
-                        undoBatchStartEtScrollY = etY;
-                        pushUndo(undoBatchStartText, undoBatchStartSelStart, undoBatchStartSelEnd, undoBatchStartScrollY, undoBatchStartEtScrollY);
-                        redoStack.clear();
-                        updateUndoButtons();
-                    }
-                }
+                beforeScrollY = getCurrentEtScrollY();
+                changeStart = start;
+                changeCount = count;
+                changeAfter = after;
             }
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
                 if (ignoreTextChange) return;
                 dirty = true;
-                scheduleUndoDebounced();
                 scheduleAutosaveDebounced();
             }
-            @Override public void afterTextChanged(Editable s) {}
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (ignoreTextChange) return;
+                String afterStr = s != null ? s.toString() : "";
+                int afterSelStart = etContent.getSelectionStart();
+                int afterSelEnd = etContent.getSelectionEnd();
+                int afterScrollY = getCurrentEtScrollY();
+
+                onEditTextChanged(
+                        EditAction.TARGET_CONTENT,
+                        beforeStr,
+                        afterStr,
+                        beforeSelStart,
+                        beforeSelEnd,
+                        afterSelStart,
+                        afterSelEnd,
+                        beforeScrollY,
+                        afterScrollY,
+                        changeStart,
+                        changeCount,
+                        changeAfter
+                );
+            }
         });
 
         btnAddItem.setOnClickListener(v -> { HapticUtils.light(v); if (checklistAdapter != null) checklistAdapter.addNew(); });
@@ -832,8 +890,7 @@ public class EditNoteActivity extends AppCompatActivity {
 
         undoStack.clear();
         redoStack.clear();
-        undoBatchActive = false;
-        undoBatchStartText = null;
+        finalizeActiveBatch();
         updateUndoButtons();
 
         uiReady = true;
@@ -862,44 +919,28 @@ public class EditNoteActivity extends AppCompatActivity {
         return 0;
     }
 
-    private void scheduleUndoDebounced() {
-        if (ignoreTextChange) return;
-        if (pendingUndoRunnable != null) {
-            mainHandler.removeCallbacks(pendingUndoRunnable);
+    private void scheduleBatchFinalizeDebounced() {
+        if (pendingFinalizeBatchRunnable != null) {
+            mainHandler.removeCallbacks(pendingFinalizeBatchRunnable);
         }
-        long delay = isLargeTextMode() ? UNDO_DEBOUNCE_DELAY_LARGE : UNDO_DEBOUNCE_DELAY;
-        pendingUndoRunnable = () -> {
-            if (ignoreTextChange) return;
-            try {
-                if (etContent != null && etContent.getText() != null) {
-                    String current = etContent.getText().toString();
-                    int curSelStart = 0, curSelEnd = 0;
-                    int curScroll = getCurrentScrollY();
-                    try {
-                        curSelStart = etContent.getSelectionStart();
-                        curSelEnd = etContent.getSelectionEnd();
-                    } catch (Exception ignored) {}
-                    if (!current.equals(lastContent)) {
-                        lastContent = current;
-                        lastSelStart = curSelStart;
-                        lastSelEnd = curSelEnd;
-                        lastScrollY = curScroll;
-                    } else {
-                        lastSelStart = curSelStart;
-                        lastSelEnd = curSelEnd;
-                        lastScrollY = curScroll;
-                    }
-                    // Batch finished after pause -> next keystroke will start new undo entry
-                    undoBatchActive = false;
-                    undoBatchStartText = null;
+        pendingFinalizeBatchRunnable = this::finalizeActiveBatch;
+        mainHandler.postDelayed(pendingFinalizeBatchRunnable, BATCH_FINALIZE_DELAY);
+    }
+
+    private void finalizeActiveBatch() {
+        if (pendingFinalizeBatchRunnable != null) {
+            mainHandler.removeCallbacks(pendingFinalizeBatchRunnable);
+            pendingFinalizeBatchRunnable = null;
+        }
+        if (activeBatchAction != null) {
+            if (activeBatchAction.beforeText.equals(activeBatchAction.afterText)) {
+                if (!undoStack.isEmpty() && undoStack.peek() == activeBatchAction) {
+                    undoStack.pop();
                 }
-            } catch (Exception ignored) {
-                undoBatchActive = false;
-                undoBatchStartText = null;
             }
-            pendingUndoRunnable = null;
-        };
-        mainHandler.postDelayed(pendingUndoRunnable, delay);
+            activeBatchAction = null;
+            updateUndoButtons();
+        }
     }
 
     private void scheduleAutosaveDebounced() {
@@ -917,9 +958,9 @@ public class EditNoteActivity extends AppCompatActivity {
     }
 
     private void cancelPendingRunnables() {
-        if (pendingUndoRunnable != null) {
-            mainHandler.removeCallbacks(pendingUndoRunnable);
-            pendingUndoRunnable = null;
+        if (pendingFinalizeBatchRunnable != null) {
+            mainHandler.removeCallbacks(pendingFinalizeBatchRunnable);
+            pendingFinalizeBatchRunnable = null;
         }
         if (pendingAutosaveRunnable != null) {
             mainHandler.removeCallbacks(pendingAutosaveRunnable);
@@ -930,8 +971,7 @@ public class EditNoteActivity extends AppCompatActivity {
             pendingSearchRunnable = null;
         }
         searchGeneration++;
-        undoBatchActive = false;
-        undoBatchStartText = null;
+        activeBatchAction = null;
     }
 
     private void performAutosaveAsync() {
@@ -1290,240 +1330,236 @@ public class EditNoteActivity extends AppCompatActivity {
         attachmentsAdapter.notifyDataSetChanged();
     }
 
-    private void pushUndo(String text, int selStart, int selEnd, int scrollY, int etScrollY) {
-        if (text == null) return;
-        if (!undoStack.isEmpty()) {
-            UndoState top = undoStack.peek();
-            if (top != null && top.text != null) {
-                if (top.text.length() == text.length()) {
-                    if (text.length() < 5000) {
-                        if (text.equals(top.text)) return;
-                    } else {
-                        if (top.text.hashCode() == text.hashCode() && text.equals(top.text)) return;
-                    }
-                }
-            }
-        }
-        int max;
+    private int getMaxHistoryLimit() {
         try {
-            int len = etContent != null && etContent.getText() != null ? etContent.getText().length() : text.length();
-            if (len > 100000) max = 3;
-            else if (len > 50000) max = 5;
-            else if (len > LARGE_TEXT_THRESHOLD) max = 8;
-            else max = MAX_UNDO_STACK;
+            int len = 0;
+            if (etContent != null && etContent.getText() != null) len += etContent.getText().length();
+            if (etTitle != null && etTitle.getText() != null) len += etTitle.getText().length();
+            if (len > 100000) return 15;
+            if (len > 30000) return 25;
+            return 50;
         } catch (Exception e) {
-            max = MAX_UNDO_STACK;
+            return 30;
         }
+    }
+
+    private void pushToUndoStack(EditAction action) {
+        if (action == null) return;
+        int max = getMaxHistoryLimit();
         while (undoStack.size() >= max) {
             undoStack.pollLast();
         }
-        undoStack.push(new UndoState(text, selStart, selEnd, scrollY, etScrollY));
-        while (redoStack.size() > max) {
-            redoStack.pollLast();
+        undoStack.push(action);
+    }
+
+    private void onEditTextChanged(int target, String beforeText, String afterText,
+                                  int beforeSelStart, int beforeSelEnd,
+                                  int afterSelStart, int afterSelEnd,
+                                  int beforeScrollY, int afterScrollY,
+                                  int start, int count, int after) {
+        if (ignoreTextChange) return;
+        if (beforeText == null) beforeText = "";
+        if (afterText == null) afterText = "";
+        if (beforeText.equals(afterText)) return;
+
+        int netDelta = after - count;
+        int actionType;
+        if (netDelta > 0 && after <= 2 && count <= 1) {
+            actionType = EditAction.ACTION_INSERT;
+        } else if (netDelta < 0 && count <= 2 && after == 0) {
+            actionType = EditAction.ACTION_DELETE;
+        } else {
+            actionType = EditAction.ACTION_REPLACE;
         }
-    }
-    private void pushUndo(String text, int selStart, int selEnd, int scrollY) {
-        pushUndo(text, selStart, selEnd, scrollY, getCurrentEtScrollY());
-    }
-    private void pushUndo(String text, int selStart, int selEnd) {
-        pushUndo(text, selStart, selEnd, getCurrentScrollY(), getCurrentEtScrollY());
-    }
-    private void pushUndo(String text) {
-        pushUndo(text, 0, 0, getCurrentScrollY(), getCurrentEtScrollY());
+
+        boolean canMerge = false;
+        if (activeBatchAction != null && activeBatchAction.target == target && activeBatchAction.actionType == actionType) {
+            if (actionType == EditAction.ACTION_INSERT) {
+                if (Math.abs(start - activeBatchAction.afterSelStart) <= 2) {
+                    canMerge = true;
+                }
+            } else if (actionType == EditAction.ACTION_DELETE) {
+                if (Math.abs(start - activeBatchAction.afterSelStart) <= 2) {
+                    canMerge = true;
+                }
+            }
+        }
+
+        if (canMerge && activeBatchAction != null) {
+            activeBatchAction.afterText = afterText;
+            activeBatchAction.afterSelStart = afterSelStart;
+            activeBatchAction.afterSelEnd = afterSelEnd;
+            activeBatchAction.afterScrollY = afterScrollY;
+
+            if (actionType == EditAction.ACTION_INSERT && after == 1 && start < afterText.length() && afterText.charAt(start) == '
+') {
+                finalizeActiveBatch();
+            } else {
+                scheduleBatchFinalizeDebounced();
+            }
+        } else {
+            finalizeActiveBatch();
+
+            EditAction newAction = new EditAction(
+                    target,
+                    beforeText,
+                    afterText,
+                    beforeSelStart,
+                    beforeSelEnd,
+                    afterSelStart,
+                    afterSelEnd,
+                    beforeScrollY,
+                    afterScrollY,
+                    actionType
+            );
+
+            pushToUndoStack(newAction);
+            redoStack.clear();
+
+            if (actionType != EditAction.ACTION_REPLACE) {
+                activeBatchAction = newAction;
+                if (actionType == EditAction.ACTION_INSERT && after == 1 && start < afterText.length() && afterText.charAt(start) == '
+') {
+                    finalizeActiveBatch();
+                } else {
+                    scheduleBatchFinalizeDebounced();
+                }
+            }
+        }
+
+        updateUndoButtons();
     }
 
     private void doUndo() {
         if (!ensureEditableMode(getString(R.string.edit_note_read_mode_enabled))) return;
-        if (undoStack.isEmpty()) return;
-        // Cancel any pending batch - we are jumping to old state
-        if (pendingUndoRunnable != null) {
-            mainHandler.removeCallbacks(pendingUndoRunnable);
-            pendingUndoRunnable = null;
-        }
-        undoBatchActive = false;
-        undoBatchStartText = null;
+        finalizeActiveBatch();
 
-        String current;
-        int curSelStart = 0, curSelEnd = 0;
-        int curScroll = getCurrentScrollY();
-        int curEtScroll = getCurrentEtScrollY();
-        try {
-            current = etContent != null && etContent.getText() != null ? etContent.getText().toString() : lastContent;
-            curSelStart = etContent.getSelectionStart();
-            curSelEnd = etContent.getSelectionEnd();
-        } catch (Exception e) {
-            current = lastContent;
-        }
-        // Push current to redo
-        if (current != null) {
-            redoStack.push(new UndoState(current, curSelStart, curSelEnd, curScroll, curEtScroll));
-            while (redoStack.size() > MAX_UNDO_STACK) redoStack.pollLast();
+        while (!undoStack.isEmpty()) {
+            EditAction action = undoStack.pop();
+            if (action == null) continue;
+
+            EditText targetEt = (action.target == EditAction.TARGET_TITLE) ? etTitle : etContent;
+            if (targetEt == null) continue;
+
+            String currentText = targetEt.getText() != null ? targetEt.getText().toString() : "";
+            if (action.beforeText.equals(currentText) && !undoStack.isEmpty()) {
+                continue;
+            }
+
+            redoStack.push(action);
+            int max = getMaxHistoryLimit();
+            while (redoStack.size() > max) {
+                redoStack.pollLast();
+            }
+
+            applyEditState(targetEt, action.target, action.beforeText, action.beforeSelStart, action.beforeSelEnd, action.beforeScrollY);
+            break;
         }
 
-        UndoState prev = undoStack.pop();
-        ignoreTextChange = true;
-        try {
-            etContent.setText(prev.text);
-            lastContent = prev.text;
-            lastSelStart = prev.selStart;
-            lastSelEnd = prev.selEnd;
-            lastScrollY = prev.scrollY;
-            dirty = true;
-            scheduleAutosaveDebounced();
-        } finally {
-            ignoreTextChange = false;
-        }
-        final int selS = prev.selStart;
-        final int selE = prev.selEnd;
-        final int savedScrollY = prev.scrollY;
-        final int savedEtScrollY = prev.etScrollY;
-        if (etContent != null) {
-            // First post: restore selection after layout
-            etContent.post(() -> {
-                try {
-                    int len = etContent.getText() != null ? etContent.getText().length() : 0;
-                    int s = Math.max(0, Math.min(selS, len));
-                    int e = Math.max(0, Math.min(selE, len));
-                    // Ensure focus before selection
-                    etContent.requestFocus();
-                    etContent.setSelection(s, e);
-                } catch (Exception ignored) {
-                    try { etContent.setSelection(Math.min(prev.text.length(), etContent.getText() != null ? etContent.getText().length() : 0)); } catch (Exception ignored2) {}
-                }
-                // Second post: restore scroll exactly where it was before edit - prevents jump to top/middle/end
-                etContent.post(() -> {
-                    try {
-                        // Fixed-height mode: EditText scrollable, NestedScrollView not
-                        // Wrap mode: NestedScrollView scrollable
-                        boolean isFixed = true;
-                        try {
-                            if (contentContainer != null) {
-                                android.view.ViewGroup.LayoutParams lp = contentContainer.getLayoutParams();
-                                if (lp != null && lp.height == android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {
-                                    isFixed = false;
-                                }
-                            }
-                        } catch (Exception ignored) {}
-                        if (isFixed) {
-                            // Restore EditText internal scroll
-                            if (savedEtScrollY != 0) {
-                                etContent.scrollTo(0, savedEtScrollY);
-                            } else if (savedScrollY != 0) {
-                                etContent.scrollTo(0, savedScrollY);
-                            }
-                            // If no saved scroll, ensure cursor visible but not jumping
-                            // Use Layout to bring selection into view only if needed
-                            try {
-                                Layout layout = etContent.getLayout();
-                                if (layout != null) {
-                                    int line = layout.getLineForOffset(Math.max(0, Math.min(selS, etContent.getText().length())));
-                                    int lineTop = layout.getLineTop(line);
-                                    int lineBottom = layout.getLineBottom(line);
-                                    int etScroll = etContent.getScrollY();
-                                    int etH = etContent.getHeight();
-                                    if (etH > 0 && (lineTop < etScroll || lineBottom > etScroll + etH)) {
-                                        int target = Math.max(0, lineTop - etH / 3);
-                                        // Only adjust if we had no saved scroll (avoid jump)
-                                        if (savedEtScrollY == 0 && savedScrollY == 0) {
-                                            etContent.scrollTo(0, target);
-                                        }
-                                    }
-                                }
-                            } catch (Exception ignored) {}
-                        } else {
-                            // Wrap mode: restore outer scroll
-                            if (scrollContent != null && savedScrollY != 0) {
-                                scrollContent.scrollTo(0, savedScrollY);
-                            }
-                            if (savedEtScrollY != 0) {
-                                etContent.scrollTo(0, savedEtScrollY);
-                            }
-                        }
-                    } catch (Exception ignored) {}
-                });
-            });
-        }
         updateUndoButtons();
     }
 
     private void doRedo() {
         if (!ensureEditableMode(getString(R.string.edit_note_read_mode_enabled))) return;
-        if (redoStack.isEmpty()) return;
-        if (pendingUndoRunnable != null) {
-            mainHandler.removeCallbacks(pendingUndoRunnable);
-            pendingUndoRunnable = null;
-        }
-        undoBatchActive = false;
-        undoBatchStartText = null;
+        finalizeActiveBatch();
 
-        UndoState next = redoStack.pop();
-        try {
-            String cur = etContent != null && etContent.getText() != null ? etContent.getText().toString() : lastContent;
-            int curS = 0, curE = 0;
-            int curY = getCurrentScrollY();
-            int curEtY = getCurrentEtScrollY();
-            try { curS = etContent.getSelectionStart(); curE = etContent.getSelectionEnd(); } catch (Exception ignored) {}
-            if (cur != null) pushUndo(cur, curS, curE, curY, curEtY);
-        } catch (Exception ignored) {
-            pushUndo(lastContent, lastSelStart, lastSelEnd, lastScrollY, getCurrentEtScrollY());
+        while (!redoStack.isEmpty()) {
+            EditAction action = redoStack.pop();
+            if (action == null) continue;
+
+            EditText targetEt = (action.target == EditAction.TARGET_TITLE) ? etTitle : etContent;
+            if (targetEt == null) continue;
+
+            String currentText = targetEt.getText() != null ? targetEt.getText().toString() : "";
+            if (action.afterText.equals(currentText) && !redoStack.isEmpty()) {
+                continue;
+            }
+
+            pushToUndoStack(action);
+
+            applyEditState(targetEt, action.target, action.afterText, action.afterSelStart, action.afterSelEnd, action.afterScrollY);
+            break;
         }
-        ignoreTextChange = true;
-        try {
-            etContent.setText(next.text);
-            lastContent = next.text;
-            lastSelStart = next.selStart;
-            lastSelEnd = next.selEnd;
-            lastScrollY = next.scrollY;
-            dirty = true;
-            scheduleAutosaveDebounced();
-        } finally {
-            ignoreTextChange = false;
-        }
-        final int selS = next.selStart;
-        final int selE = next.selEnd;
-        final int savedScrollY = next.scrollY;
-        final int savedEtScrollY = next.etScrollY;
-        if (etContent != null) {
-            etContent.post(() -> {
-                try {
-                    int len = etContent.getText() != null ? etContent.getText().length() : 0;
-                    int s = Math.max(0, Math.min(selS, len));
-                    int e = Math.max(0, Math.min(selE, len));
-                    etContent.requestFocus();
-                    etContent.setSelection(s, e);
-                } catch (Exception ignored) {
-                    try { etContent.setSelection(Math.min(next.text.length(), etContent.getText().length())); } catch (Exception ignored2) {}
-                }
-                etContent.post(() -> {
-                    try {
-                        boolean isFixed = true;
-                        try {
-                            if (contentContainer != null) {
-                                android.view.ViewGroup.LayoutParams lp = contentContainer.getLayoutParams();
-                                if (lp != null && lp.height == android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {
-                                    isFixed = false;
-                                }
-                            }
-                        } catch (Exception ignored) {}
-                        if (isFixed) {
-                            if (savedEtScrollY != 0) etContent.scrollTo(0, savedEtScrollY);
-                            else if (savedScrollY != 0) etContent.scrollTo(0, savedScrollY);
-                        } else {
-                            if (scrollContent != null && savedScrollY != 0) scrollContent.scrollTo(0, savedScrollY);
-                            if (savedEtScrollY != 0) etContent.scrollTo(0, savedEtScrollY);
-                        }
-                    } catch (Exception ignored) {}
-                });
-            });
-        }
+
         updateUndoButtons();
     }
 
+    private void applyEditState(EditText targetEt, int targetType, String text, int selStart, int selEnd, int scrollY) {
+        if (targetEt == null) return;
+        String safeText = text != null ? text : "";
+
+        ignoreTextChange = true;
+        try {
+            if (!targetEt.isFocused()) {
+                targetEt.requestFocus();
+            }
+
+            targetEt.setText(safeText);
+            int len = safeText.length();
+            int s = Math.max(0, Math.min(selStart, len));
+            int e = Math.max(0, Math.min(selEnd, len));
+            targetEt.setSelection(s, e);
+
+            if (targetType == EditAction.TARGET_CONTENT && etContent != null) {
+                if (scrollY >= 0) {
+                    etContent.scrollTo(0, scrollY);
+                }
+            }
+
+            dirty = true;
+            scheduleAutosaveDebounced();
+        } catch (Exception ignored) {
+        } finally {
+            ignoreTextChange = false;
+        }
+    }
+
     private void updateUndoButtons() {
-        btnUndo.setAlpha((readMode || undoStack.isEmpty()) ? 0.4f : 1f);
-        btnRedo.setAlpha((readMode || redoStack.isEmpty()) ? 0.4f : 1f);
-        btnUndo.setEnabled(!readMode && !undoStack.isEmpty());
-        btnRedo.setEnabled(!readMode && !redoStack.isEmpty());
+        boolean canUndo = !readMode && (!undoStack.isEmpty() || activeBatchAction != null);
+        boolean canRedo = !readMode && !redoStack.isEmpty();
+
+        if (btnUndo != null) {
+            btnUndo.setAlpha(canUndo ? 1.0f : 0.4f);
+            btnUndo.setEnabled(canUndo);
+        }
+        if (btnRedo != null) {
+            btnRedo.setAlpha(canRedo ? 1.0f : 0.4f);
+            btnRedo.setEnabled(canRedo);
+        }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            boolean isCtrlPressed = (event.getMetaState() & KeyEvent.META_CTRL_ON) != 0 || event.isCtrlPressed();
+            boolean isShiftPressed = (event.getMetaState() & KeyEvent.META_SHIFT_ON) != 0 || event.isShiftPressed();
+            int keyCode = event.getKeyCode();
+
+            if (isCtrlPressed) {
+                if (keyCode == KeyEvent.KEYCODE_Z) {
+                    if (isShiftPressed) {
+                        if (!readMode && !redoStack.isEmpty()) {
+                            HapticUtils.light(btnRedo != null ? btnRedo : etContent);
+                            doRedo();
+                            return true;
+                        }
+                    } else {
+                        if (!readMode && (!undoStack.isEmpty() || activeBatchAction != null)) {
+                            HapticUtils.light(btnUndo != null ? btnUndo : etContent);
+                            doUndo();
+                            return true;
+                        }
+                    }
+                } else if (keyCode == KeyEvent.KEYCODE_Y) {
+                    if (!readMode && !redoStack.isEmpty()) {
+                        HapticUtils.light(btnRedo != null ? btnRedo : etContent);
+                        doRedo();
+                        return true;
+                    }
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     private void setReadMode(boolean enabled, boolean fromUser) {
@@ -3672,12 +3708,13 @@ public class EditNoteActivity extends AppCompatActivity {
             idx = lowerText.indexOf(lowerQuery, idx + query.length());
         }
         if (count == 0) return 0;
-        try {
-            int curS = etContent.getSelectionStart();
-            int curE = etContent.getSelectionEnd();
-            pushUndo(text, curS, curE, getCurrentScrollY());
-            redoStack.clear();
-        } catch (Exception ignored) {}
+
+        finalizeActiveBatch();
+
+        int curS = etContent.getSelectionStart();
+        int curE = etContent.getSelectionEnd();
+        int curScroll = getCurrentEtScrollY();
+
         StringBuilder sb = new StringBuilder(text.length());
         int last = 0;
         int searchIdx = lowerText.indexOf(lowerQuery);
@@ -3689,25 +3726,26 @@ public class EditNoteActivity extends AppCompatActivity {
         }
         sb.append(text.substring(last));
         String replaced = sb.toString();
-        ignoreTextChange = true;
-        try {
-            etContent.setText(replaced);
-            try {
-                int first = lowerText.indexOf(lowerQuery);
-                int pos = first >= 0 ? first : 0;
-                etContent.setSelection(Math.min(pos, replaced.length()));
-                lastSelStart = pos;
-                lastSelEnd = pos;
-                lastScrollY = 0;
-            } catch (Exception e) {
-                etContent.setSelection(0);
-            }
-            lastContent = replaced;
-        } finally {
-            ignoreTextChange = false;
-        }
-        dirty = true;
-        scheduleAutosaveDebounced();
+
+        int first = lowerText.indexOf(lowerQuery);
+        int newSel = first >= 0 ? Math.min(first + repl.length(), replaced.length()) : 0;
+
+        EditAction replaceAction = new EditAction(
+                EditAction.TARGET_CONTENT,
+                text,
+                replaced,
+                curS,
+                curE,
+                newSel,
+                newSel,
+                curScroll,
+                curScroll,
+                EditAction.ACTION_REPLACE
+        );
+        pushToUndoStack(replaceAction);
+        redoStack.clear();
+
+        applyEditState(etContent, EditAction.TARGET_CONTENT, replaced, newSel, newSel, curScroll);
         updateUndoButtons();
         return count;
     }
