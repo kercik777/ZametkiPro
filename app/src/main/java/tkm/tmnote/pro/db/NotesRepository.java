@@ -262,6 +262,26 @@ public class NotesRepository {
     }
 
     private List<Note> query(long categoryFilter, int filter, String searchQuery, int sortMode) {
+        // Try with hidden categories filter, fallback without it for old DBs (first launch / Sketchware old DB)
+        try {
+            return queryInternal(categoryFilter, filter, searchQuery, sortMode, true);
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (msg.contains("hidden_from_all") || msg.contains("no such column")) {
+                try {
+                    android.util.Log.w("NotesRepository", "hidden column missing, retry without hidden filter", e);
+                    return queryInternal(categoryFilter, filter, searchQuery, sortMode, false);
+                } catch (Exception e2) {
+                    try { android.util.Log.e("NotesRepository", "query fallback failed", e2); } catch (Exception ignored) {}
+                    return new ArrayList<>();
+                }
+            }
+            try { android.util.Log.e("NotesRepository", "query failed", e); } catch (Exception ignored) {}
+            return new ArrayList<>();
+        }
+    }
+
+    private List<Note> queryInternal(long categoryFilter, int filter, String searchQuery, int sortMode, boolean useHiddenFilter) {
         Cursor c = null;
         List<Note> result = new ArrayList<>();
         try {
@@ -279,7 +299,7 @@ public class NotesRepository {
             if (categoryFilter > 0) {
                 where.append(" AND ").append(DbHelper.C_CATEGORY_ID).append("=?");
                 args.add(String.valueOf(categoryFilter));
-            } else if (filter != 4 && filter != 5) {
+            } else if (filter != 4 && filter != 5 && useHiddenFilter) {
                 where.append(" AND (").append(DbHelper.C_CATEGORY_ID).append("=0 OR ")
                         .append(DbHelper.C_CATEGORY_ID).append(" NOT IN (SELECT ")
                         .append(DbHelper.C_ID).append(" FROM ").append(DbHelper.T_CATEGORIES)
@@ -347,13 +367,31 @@ public class NotesRepository {
     }
 
     public DashboardCounts getDashboardCounts() {
+        // Try with hidden filter, fallback without for old DBs
+        try {
+            return getDashboardCountsInternal(true);
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (msg.contains("hidden_from_all") || msg.contains("no such column")) {
+                try { return getDashboardCountsInternal(false); } catch (Exception e2) { return new DashboardCounts(); }
+            }
+            return new DashboardCounts();
+        }
+    }
+
+    private DashboardCounts getDashboardCountsInternal(boolean useHiddenFilter) {
         Cursor c = null;
         DashboardCounts counts = new DashboardCounts();
         try {
-            String visibleCond = "(" + DbHelper.C_STATUS + "=" + DbHelper.STATUS_ACTIVE +
-                    " AND (" + DbHelper.C_CATEGORY_ID + "=0 OR " + DbHelper.C_CATEGORY_ID +
-                    " NOT IN (SELECT " + DbHelper.C_ID + " FROM " + DbHelper.T_CATEGORIES +
-                    " WHERE " + DbHelper.C_CAT_HIDDEN + "=1)))";
+            String visibleCond;
+            if (useHiddenFilter) {
+                visibleCond = "(" + DbHelper.C_STATUS + "=" + DbHelper.STATUS_ACTIVE +
+                        " AND (" + DbHelper.C_CATEGORY_ID + "=0 OR " + DbHelper.C_CATEGORY_ID +
+                        " NOT IN (SELECT " + DbHelper.C_ID + " FROM " + DbHelper.T_CATEGORIES +
+                        " WHERE " + DbHelper.C_CAT_HIDDEN + "=1)))";
+            } else {
+                visibleCond = "(" + DbHelper.C_STATUS + "=" + DbHelper.STATUS_ACTIVE + ")";
+            }
 
             String sql = "SELECT " +
                     "SUM(CASE WHEN " + visibleCond + " THEN 1 ELSE 0 END), " +
@@ -403,13 +441,31 @@ public class NotesRepository {
     }
 
     public int countActiveVisible() {
+        try {
+            return countActiveVisibleInternal(true);
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (msg.contains("hidden_from_all") || msg.contains("no such column")) {
+                try { return countActiveVisibleInternal(false); } catch (Exception e2) { return 0; }
+            }
+            return 0;
+        }
+    }
+
+    private int countActiveVisibleInternal(boolean useHiddenFilter) {
         Cursor c = null;
         try {
-            String q = "SELECT COUNT(*) FROM " + DbHelper.T_NOTES +
-                    " WHERE " + DbHelper.C_STATUS + "=" + DbHelper.STATUS_ACTIVE +
-                    " AND (" + DbHelper.C_CATEGORY_ID + "=0 OR " +
-                    DbHelper.C_CATEGORY_ID + " NOT IN (SELECT " + DbHelper.C_ID +
-                    " FROM " + DbHelper.T_CATEGORIES + " WHERE " + DbHelper.C_CAT_HIDDEN + "=1))";
+            String q;
+            if (useHiddenFilter) {
+                q = "SELECT COUNT(*) FROM " + DbHelper.T_NOTES +
+                        " WHERE " + DbHelper.C_STATUS + "=" + DbHelper.STATUS_ACTIVE +
+                        " AND (" + DbHelper.C_CATEGORY_ID + "=0 OR " +
+                        DbHelper.C_CATEGORY_ID + " NOT IN (SELECT " + DbHelper.C_ID +
+                        " FROM " + DbHelper.T_CATEGORIES + " WHERE " + DbHelper.C_CAT_HIDDEN + "=1))";
+            } else {
+                q = "SELECT COUNT(*) FROM " + DbHelper.T_NOTES +
+                        " WHERE " + DbHelper.C_STATUS + "=" + DbHelper.STATUS_ACTIVE;
+            }
             c = rdb().rawQuery(q, null);
             if (c != null && c.moveToFirst()) return c.getInt(0);
             return 0;
