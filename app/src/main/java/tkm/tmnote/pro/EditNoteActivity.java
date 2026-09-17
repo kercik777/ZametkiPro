@@ -148,7 +148,9 @@ public class EditNoteActivity extends AppCompatActivity {
         final int selStart;
         final int selEnd;
         final int scrollY;
-        UndoState(String t, int s, int e, int y) { text = t; selStart = s; selEnd = e; scrollY = y; }
+        final int etScrollY;
+        UndoState(String t, int s, int e, int y, int etY) { text = t; selStart = s; selEnd = e; scrollY = y; etScrollY = etY; }
+        UndoState(String t, int s, int e, int y) { this(t, s, e, y, 0); }
     }
     private final Deque<UndoState> undoStack = new ArrayDeque<>();
     private final Deque<UndoState> redoStack = new ArrayDeque<>();
@@ -646,32 +648,33 @@ public class EditNoteActivity extends AppCompatActivity {
             etContent.setFreezesText(false);
         } catch (Exception ignored) {}
 
-        // Large text: make EditText fixed height to avoid parent requestLayout on each keystroke
+        // Rocket: always use fixed-height EditText to avoid parent requestLayout on each keystroke.
+        // Previously only for >20k, but even 2-5k causes Choreographer skips and BLASTBufferQueue stalls.
         try {
-            if (initialContent != null && initialContent.length() > LARGE_TEXT_THRESHOLD) {
-                if (scrollContent != null) {
-                    scrollContent.setNestedScrollingEnabled(false);
+            if (scrollContent != null) {
+                scrollContent.setNestedScrollingEnabled(false);
+            }
+            if (contentContainer != null && etContent != null) {
+                android.view.ViewGroup.LayoutParams cLp = contentContainer.getLayoutParams();
+                if (cLp != null) {
+                    cLp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+                    contentContainer.setLayoutParams(cLp);
                 }
-                if (contentContainer != null && etContent != null) {
-                    android.view.ViewGroup.LayoutParams cLp = contentContainer.getLayoutParams();
-                    if (cLp != null) {
-                        cLp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
-                        contentContainer.setLayoutParams(cLp);
+                if (contentContainer instanceof LinearLayout) {
+                    LinearLayout.LayoutParams eLp = (LinearLayout.LayoutParams) etContent.getLayoutParams();
+                    if (eLp != null) {
+                        eLp.height = 0;
+                        eLp.weight = 1;
+                        etContent.setLayoutParams(eLp);
                     }
-                    if (contentContainer instanceof LinearLayout) {
-                        LinearLayout.LayoutParams eLp = (LinearLayout.LayoutParams) etContent.getLayoutParams();
-                        if (eLp != null) {
-                            eLp.height = 0;
-                            eLp.weight = 1;
-                            etContent.setLayoutParams(eLp);
-                        }
-                    }
-                    etContent.setMinHeight(0);
-                    etContent.setMinimumHeight(0);
-                    etContent.setVerticalScrollBarEnabled(true);
-                    etContent.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-                    etContent.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
                 }
+                etContent.setMinHeight(0);
+                etContent.setMinimumHeight(0);
+                etContent.setVerticalScrollBarEnabled(true);
+                etContent.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+                etContent.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
+                // Ensure EditText itself is scrollable and does not trigger parent layout
+                etContent.setHorizontallyScrolling(false);
             }
         } catch (Exception ignored) {}
 
@@ -702,13 +705,15 @@ public class EditNoteActivity extends AppCompatActivity {
                     lastBeforeSelStart = etContent.getSelectionStart();
                     lastBeforeSelEnd = etContent.getSelectionEnd();
                     lastBeforeScrollY = getCurrentScrollY();
+                    lastScrollY = lastBeforeScrollY;
                 } catch (Exception e) {
                     lastBeforeSelStart = start;
                     lastBeforeSelEnd = start;
                     lastBeforeScrollY = getCurrentScrollY();
                 }
                 if (beforeTextChangeWasLarge) {
-                    pushUndo(s != null ? s.toString() : lastContent, lastBeforeSelStart, lastBeforeSelEnd, lastBeforeScrollY);
+                    int etY = getCurrentEtScrollY();
+                    pushUndo(s != null ? s.toString() : lastContent, lastBeforeSelStart, lastBeforeSelEnd, lastBeforeScrollY, etY);
                     redoStack.clear();
                 }
             }
@@ -717,10 +722,8 @@ public class EditNoteActivity extends AppCompatActivity {
                 dirty = true;
                 scheduleUndoDebounced();
                 scheduleAutosaveDebounced();
-                // For large text, avoid UI work on each keystroke
-                if (!isLargeTextMode()) {
-                    updateUndoButtons();
-                }
+                // Avoid UI work on each keystroke for all sizes - updateUndoButtons is cheap but still invalidates
+                // Only update if stack state actually changes (handled in scheduleUndoDebounced)
             }
             @Override public void afterTextChanged(Editable s) {}
         });
@@ -732,8 +735,8 @@ public class EditNoteActivity extends AppCompatActivity {
             try {
                 rvAttachments.setHasFixedSize(true);
                 rvAttachments.setItemViewCacheSize(20);
-                rvAttachments.setDrawingCacheEnabled(true);
-                rvAttachments.setDrawingCacheQuality(View.DRAWING_CACHE_QUALITY_LOW);
+                // Drawing cache is deprecated and causes extra bitmap allocations -> lag
+                rvAttachments.setDrawingCacheEnabled(false);
             } catch (Exception ignored) {}
         }
         attachmentsAdapter = new AttachmentsEditorAdapter(this, new ArrayList<>(),
@@ -806,6 +809,13 @@ public class EditNoteActivity extends AppCompatActivity {
         return 0;
     }
 
+    private int getCurrentEtScrollY() {
+        try {
+            if (etContent != null) return etContent.getScrollY();
+        } catch (Exception ignored) {}
+        return 0;
+    }
+
     private void scheduleUndoDebounced() {
         if (ignoreTextChange) return;
         if (pendingUndoRunnable != null) {
@@ -815,23 +825,27 @@ public class EditNoteActivity extends AppCompatActivity {
             if (ignoreTextChange) return;
             try {
                 if (etContent != null && etContent.getText() != null) {
+                    // For large text, avoid toString() on every debounce if length unchanged and no dirty?
+                    // But we need to detect change - compare length first cheap
                     String current = etContent.getText().toString();
                     int curSelStart = 0, curSelEnd = 0;
                     int curScroll = getCurrentScrollY();
+                    int curEtScroll = getCurrentEtScrollY();
                     try {
                         curSelStart = etContent.getSelectionStart();
                         curSelEnd = etContent.getSelectionEnd();
                     } catch (Exception ignored) {}
                     if (!current.equals(lastContent)) {
                         if (!beforeTextChangeWasLarge) {
-                            pushUndo(lastContent, lastSelStart, lastSelEnd, lastScrollY);
+                            pushUndo(lastContent, lastSelStart, lastSelEnd, lastScrollY, getCurrentEtScrollY());
                             redoStack.clear();
                         }
                         lastContent = current;
                         lastSelStart = curSelStart;
                         lastSelEnd = curSelEnd;
                         lastScrollY = curScroll;
-                        updateUndoButtons();
+                        // Update undo buttons only when stack changes, not on every keystroke
+                        mainHandler.post(() -> updateUndoButtons());
                     } else {
                         lastSelStart = curSelStart;
                         lastSelEnd = curSelEnd;
@@ -1228,9 +1242,22 @@ public class EditNoteActivity extends AppCompatActivity {
         attachmentsAdapter.notifyDataSetChanged();
     }
 
-    private void pushUndo(String text, int selStart, int selEnd, int scrollY) {
+    private void pushUndo(String text, int selStart, int selEnd, int scrollY, int etScrollY) {
         if (text == null) return;
-        if (!undoStack.isEmpty() && text.equals(undoStack.peek().text)) return;
+        // Avoid O(n) equals for huge texts - check length first, and skip equals if > 5000 to save UI thread
+        if (!undoStack.isEmpty()) {
+            UndoState top = undoStack.peek();
+            if (top != null && top.text != null) {
+                if (top.text.length() == text.length()) {
+                    if (text.length() < 5000) {
+                        if (text.equals(top.text)) return;
+                    } else {
+                        // For large texts, compare hash quickly to avoid full scan if obviously same
+                        if (top.text.hashCode() == text.hashCode() && text.equals(top.text)) return;
+                    }
+                }
+            }
+        }
         int max = isLargeTextMode() ? 10 : MAX_UNDO_STACK;
         try {
             if (etContent != null && etContent.getText() != null && etContent.getText().length() > 100000) {
@@ -1240,16 +1267,19 @@ public class EditNoteActivity extends AppCompatActivity {
         while (undoStack.size() >= max) {
             undoStack.pollLast();
         }
-        undoStack.push(new UndoState(text, selStart, selEnd, scrollY));
+        undoStack.push(new UndoState(text, selStart, selEnd, scrollY, etScrollY));
         while (redoStack.size() > max) {
             redoStack.pollLast();
         }
     }
+    private void pushUndo(String text, int selStart, int selEnd, int scrollY) {
+        pushUndo(text, selStart, selEnd, scrollY, getCurrentEtScrollY());
+    }
     private void pushUndo(String text, int selStart, int selEnd) {
-        pushUndo(text, selStart, selEnd, getCurrentScrollY());
+        pushUndo(text, selStart, selEnd, getCurrentScrollY(), getCurrentEtScrollY());
     }
     private void pushUndo(String text) {
-        pushUndo(text, 0, 0, getCurrentScrollY());
+        pushUndo(text, 0, 0, getCurrentScrollY(), getCurrentEtScrollY());
     }
 
     private void doUndo() {
@@ -1258,6 +1288,7 @@ public class EditNoteActivity extends AppCompatActivity {
         String current;
         int curSelStart = 0, curSelEnd = 0;
         int curScroll = getCurrentScrollY();
+        int curEtScroll = getCurrentEtScrollY();
         try {
             current = etContent != null && etContent.getText() != null ? etContent.getText().toString() : lastContent;
             curSelStart = etContent.getSelectionStart();
@@ -1266,10 +1297,10 @@ public class EditNoteActivity extends AppCompatActivity {
             current = lastContent;
         }
         if (current != null && !current.equals(lastContent)) {
-            redoStack.push(new UndoState(current, curSelStart, curSelEnd, curScroll));
+            redoStack.push(new UndoState(current, curSelStart, curSelEnd, curScroll, curEtScroll));
             if (redoStack.size() > MAX_UNDO_STACK) redoStack.pollLast();
         } else {
-            redoStack.push(new UndoState(lastContent, lastSelStart, lastSelEnd, lastScrollY));
+            redoStack.push(new UndoState(lastContent, lastSelStart, lastSelEnd, lastScrollY, getCurrentEtScrollY()));
             if (redoStack.size() > MAX_UNDO_STACK) redoStack.pollLast();
         }
         UndoState prev = undoStack.pop();
@@ -1280,6 +1311,7 @@ public class EditNoteActivity extends AppCompatActivity {
             lastSelStart = prev.selStart;
             lastSelEnd = prev.selEnd;
             lastScrollY = prev.scrollY;
+            // Restore selection immediately, but ensure it sticks after layout
             try {
                 int len = etContent.getText() != null ? etContent.getText().length() : 0;
                 int s = Math.max(0, Math.min(prev.selStart, len));
@@ -1288,17 +1320,31 @@ public class EditNoteActivity extends AppCompatActivity {
             } catch (Exception ignored) {
                 try { etContent.setSelection(Math.min(prev.text.length(), etContent.getText().length())); } catch (Exception ignored2) {}
             }
-            // Restore scroll after layout
-            final int restoreY = prev.scrollY;
-            if (scrollContent != null) {
-                scrollContent.post(() -> {
-                    try { scrollContent.scrollTo(0, restoreY); } catch (Exception ignored) {}
-                });
-            }
             dirty = true;
             scheduleAutosaveDebounced();
         } finally {
             ignoreTextChange = false;
+        }
+        // Restore scrolls after layout - both outer and inner
+        final int restoreY = prev.scrollY;
+        final int restoreEtY = prev.etScrollY;
+        if (etContent != null) {
+            etContent.post(() -> {
+                try {
+                    // Restore cursor again after layout to prevent jump
+                    int len = etContent.getText() != null ? etContent.getText().length() : 0;
+                    int s = Math.max(0, Math.min(prev.selStart, len));
+                    int e = Math.max(0, Math.min(prev.selEnd, len));
+                    etContent.setSelection(s, e);
+                } catch (Exception ignored) {}
+                try { etContent.scrollTo(0, restoreEtY); } catch (Exception ignored) {}
+                // Also ensure outer scroll restored
+                try { if (scrollContent != null) scrollContent.scrollTo(0, restoreY); } catch (Exception ignored) {}
+            });
+        } else if (scrollContent != null) {
+            scrollContent.post(() -> {
+                try { scrollContent.scrollTo(0, restoreY); } catch (Exception ignored) {}
+            });
         }
         updateUndoButtons();
     }
@@ -1311,10 +1357,11 @@ public class EditNoteActivity extends AppCompatActivity {
             String cur = etContent != null && etContent.getText() != null ? etContent.getText().toString() : lastContent;
             int curS = 0, curE = 0;
             int curY = getCurrentScrollY();
+            int curEtY = getCurrentEtScrollY();
             try { curS = etContent.getSelectionStart(); curE = etContent.getSelectionEnd(); } catch (Exception ignored) {}
-            if (cur != null) pushUndo(cur, curS, curE, curY);
+            if (cur != null) pushUndo(cur, curS, curE, curY, curEtY);
         } catch (Exception ignored) {
-            pushUndo(lastContent, lastSelStart, lastSelEnd, lastScrollY);
+            pushUndo(lastContent, lastSelStart, lastSelEnd, lastScrollY, getCurrentEtScrollY());
         }
         ignoreTextChange = true;
         try {
@@ -1331,16 +1378,28 @@ public class EditNoteActivity extends AppCompatActivity {
             } catch (Exception ignored) {
                 try { etContent.setSelection(Math.min(next.text.length(), etContent.getText().length())); } catch (Exception ignored2) {}
             }
-            final int restoreY = next.scrollY;
-            if (scrollContent != null) {
-                scrollContent.post(() -> {
-                    try { scrollContent.scrollTo(0, restoreY); } catch (Exception ignored) {}
-                });
-            }
             dirty = true;
             scheduleAutosaveDebounced();
         } finally {
             ignoreTextChange = false;
+        }
+        final int restoreY = next.scrollY;
+        final int restoreEtY = next.etScrollY;
+        if (etContent != null) {
+            etContent.post(() -> {
+                try {
+                    int len = etContent.getText() != null ? etContent.getText().length() : 0;
+                    int s = Math.max(0, Math.min(next.selStart, len));
+                    int e = Math.max(0, Math.min(next.selEnd, len));
+                    etContent.setSelection(s, e);
+                } catch (Exception ignored) {}
+                try { etContent.scrollTo(0, restoreEtY); } catch (Exception ignored) {}
+                try { if (scrollContent != null) scrollContent.scrollTo(0, restoreY); } catch (Exception ignored) {}
+            });
+        } else if (scrollContent != null) {
+            scrollContent.post(() -> {
+                try { scrollContent.scrollTo(0, restoreY); } catch (Exception ignored) {}
+            });
         }
         updateUndoButtons();
     }
