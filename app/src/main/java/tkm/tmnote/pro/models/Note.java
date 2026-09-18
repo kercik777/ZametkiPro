@@ -105,57 +105,54 @@ public class Note implements Parcelable {
     }
 
     public int getCheckedCount() {
-        if (type != TYPE_CHECKLIST) return 0;
         int c = 0;
         for (ChecklistItem it : getChecklistItems()) if (it.checked) c++;
         return c;
     }
 
     public int getTotalChecklistItems() {
-        if (type != TYPE_CHECKLIST) return 0;
         return getChecklistItems().size();
     }
 
     public String getPreview() {
-        if (type == TYPE_CHECKLIST) {
-            List<ChecklistItem> items = getChecklistItems();
-            if (items.isEmpty()) return "";
-            StringBuilder sb = new StringBuilder();
+        List<ChecklistItem> items = getChecklistItems();
+        StringBuilder sb = new StringBuilder();
+        if (items != null && !items.isEmpty()) {
             int max = Math.min(items.size(), 5);
             for (int i = 0; i < max; i++) {
                 ChecklistItem it = items.get(i);
                 sb.append(it.checked ? "[x] " : "[ ] ").append(it.text);
                 if (i < max - 1) sb.append('\n');
             }
-            return sb.toString();
         }
-        return getContent();
+        String c = getContent();
+        if (c != null && !c.trim().isEmpty()) {
+            if (sb.length() > 0) sb.append("\n\n");
+            sb.append(c);
+        }
+        return sb.toString();
     }
 
     public boolean isEmpty() {
         if (!getAttachments().isEmpty()) return false;
-        if (type == TYPE_CHECKLIST) {
-            List<ChecklistItem> items = getChecklistItems();
-            if (getTitle().trim().isEmpty()) {
-                if (items.isEmpty()) return true;
-                for (ChecklistItem it : items) {
-                    if (it.text != null && !it.text.trim().isEmpty()) return false;
-                }
-                return true;
+        if (!getTitle().trim().isEmpty()) return false;
+        if (!getContent().trim().isEmpty()) return false;
+        List<ChecklistItem> items = getChecklistItems();
+        if (items != null) {
+            for (ChecklistItem it : items) {
+                if (it.text != null && !it.text.trim().isEmpty()) return false;
             }
-            return false;
         }
-        return getTitle().trim().isEmpty() && getContent().trim().isEmpty();
+        return true;
     }
 
     public int getWordCount() {
         StringBuilder sb = new StringBuilder();
         sb.append(getTitle()).append(' ');
-        if (type == TYPE_CHECKLIST) {
-            for (ChecklistItem it : getChecklistItems()) sb.append(it.text).append(' ');
-        } else {
-            sb.append(getContent());
+        for (ChecklistItem it : getChecklistItems()) {
+            if (it.text != null) sb.append(it.text).append(' ');
         }
+        sb.append(getContent());
         String t = sb.toString().trim();
         if (t.isEmpty()) return 0;
         return t.split("\\s+").length;
@@ -163,13 +160,10 @@ public class Note implements Parcelable {
 
     public int getCharCount() {
         int c = getTitle().length();
-        if (type == TYPE_CHECKLIST) {
-            for (ChecklistItem it : getChecklistItems()) {
-                if (it.text != null) c += it.text.length();
-            }
-        } else {
-            c += getContent().length();
+        for (ChecklistItem it : getChecklistItems()) {
+            if (it.text != null) c += it.text.length();
         }
+        c += getContent().length();
         return c;
     }
 

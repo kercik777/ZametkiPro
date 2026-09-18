@@ -413,13 +413,12 @@ public class EditNoteActivity extends AppCompatActivity {
                                         ignoreTextChange = true;
                                         try {
                                             etTitle.setText(initialTitle);
-                                            if (note.getType() == Note.TYPE_TEXT) {
-                                                etContent.setText(initialContent != null ? initialContent : "", TextView.BufferType.EDITABLE);
-                                                try {
-                                                    int len = etContent.getText() != null ? etContent.getText().length() : 0;
-                                                    etContent.setSelection(Math.min(selStart, len));
-                                                } catch (Exception ignored) {}
-                                            }
+                                            etContent.setText(initialContent != null ? initialContent : "", TextView.BufferType.EDITABLE);
+                                            try {
+                                                int len = etContent.getText() != null ? etContent.getText().length() : 0;
+                                                etContent.setSelection(Math.min(selStart, len));
+                                            } catch (Exception ignored) {}
+                                            setupChecklist();
                                         } finally { ignoreTextChange = false; }
                                         updatePinFav();
                                         updateCategoryLabelAsync();
@@ -643,70 +642,47 @@ public class EditNoteActivity extends AppCompatActivity {
         try {
             etTitle.setText(initialTitle);
         } catch (Exception ignored) {}
-        if (note.getType() == Note.TYPE_TEXT) {
-            try {
-                String content = initialContent != null ? initialContent : "";
-                etContent.setText(content, TextView.BufferType.EDITABLE);
-            } catch (Exception e) {
-                etContent.setText("");
-            }
-            showTextMode();
-        } else {
-            showChecklistMode();
+        try {
+            String content = initialContent != null ? initialContent : "";
+            etContent.setText(content, TextView.BufferType.EDITABLE);
+        } catch (Exception e) {
+            etContent.setText("");
         }
+        etContent.setVisibility(View.VISIBLE);
+        setTextTapToFocusEnabled(!readMode);
+        setupChecklist();
         applyTextSize(note.getTextSize());
         try {
-            etContent.setIncludeFontPadding(false);
-            if (Build.VERSION.SDK_INT >= 28) etContent.setFallbackLineSpacing(false);
-            etContent.setElegantTextHeight(false);
-            etContent.setHorizontallyScrolling(false);
-            etContent.setSaveEnabled(false);
-            etContent.setFreezesText(false);
-            if (Build.VERSION.SDK_INT >= 23) {
-                etContent.setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE);
-                etContent.setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE);
-            }
-            etContent.setLineSpacing(0f, isLargeTextMode() ? 1.2f : 1.45f);
-            etContent.setVerticalFadingEdgeEnabled(false);
-            etContent.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-            etContent.setScrollbarFadingEnabled(true);
-            // Disable spellcheck / suggestions completely for large text
-            if (isLargeTextMode()) {
-                etContent.setInputType(android.text.InputType.TYPE_CLASS_TEXT
-                        | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                        | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-            }
-        } catch (Exception ignored) {}
-
-        // Rocket: always use fixed-height EditText to avoid parent requestLayout on each keystroke.
-        // Previously only for >20k, but even 2-5k causes Choreographer skips and BLASTBufferQueue stalls.
-        try {
             if (scrollContent != null) {
-                scrollContent.setNestedScrollingEnabled(false);
-                scrollContent.setOverScrollMode(View.OVER_SCROLL_NEVER);
+                scrollContent.setNestedScrollingEnabled(true);
+                scrollContent.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
             }
-            if (contentContainer != null && etContent != null) {
+            if (contentContainer != null) {
                 android.view.ViewGroup.LayoutParams cLp = contentContainer.getLayoutParams();
                 if (cLp != null) {
-                    cLp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+                    cLp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
                     contentContainer.setLayoutParams(cLp);
                 }
-                if (contentContainer instanceof LinearLayout) {
-                    LinearLayout.LayoutParams eLp = (LinearLayout.LayoutParams) etContent.getLayoutParams();
-                    if (eLp != null) {
-                        eLp.height = 0;
-                        eLp.weight = 1;
-                        etContent.setLayoutParams(eLp);
-                    }
-                }
-                etContent.setMinHeight(0);
-                etContent.setMinimumHeight(0);
-                etContent.setVerticalScrollBarEnabled(true);
-                etContent.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
+            }
+            if (etContent != null) {
+                etContent.setIncludeFontPadding(false);
+                if (Build.VERSION.SDK_INT >= 28) etContent.setFallbackLineSpacing(false);
+                etContent.setElegantTextHeight(false);
                 etContent.setHorizontallyScrolling(false);
-                // Hardware layer for large text can improve scroll performance
-                if (isLargeTextMode() && Build.VERSION.SDK_INT >= 23) {
-                    etContent.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                etContent.setSaveEnabled(false);
+                etContent.setFreezesText(false);
+                if (Build.VERSION.SDK_INT >= 23) {
+                    etContent.setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE);
+                    etContent.setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE);
+                }
+                etContent.setLineSpacing(0f, isLargeTextMode() ? 1.2f : 1.45f);
+                etContent.setVerticalFadingEdgeEnabled(false);
+                etContent.setNestedScrollingEnabled(false);
+                etContent.setScrollbarFadingEnabled(true);
+                if (isLargeTextMode()) {
+                    etContent.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                            | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                            | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
                 }
             }
         } catch (Exception ignored) {}
@@ -1019,13 +995,13 @@ public class EditNoteActivity extends AppCompatActivity {
         final String existingContent = note.getContent();
 
         final String checklistJson;
-        if (noteType == Note.TYPE_CHECKLIST && checklistAdapter != null) {
+        if (checklistAdapter != null) {
             String tmp;
             try { tmp = tkm.tmnote.pro.models.ChecklistItem.toJson(checklistAdapter.getItems()); }
             catch (Exception e) { tmp = existingChecklistJson; }
             checklistJson = tmp;
         } else {
-            checklistJson = null;
+            checklistJson = existingChecklistJson;
         }
 
         AppExecutors.getInstance().diskIO().execute(() -> {
@@ -1036,14 +1012,12 @@ public class EditNoteActivity extends AppCompatActivity {
                 Note toSave = new Note();
                 toSave.setId(noteId);
                 toSave.setTitle(finalTitle);
-                if (noteType == Note.TYPE_TEXT) {
-                    toSave.setContent(finalContent);
-                } else {
-                    if (checklistJson != null) toSave.setChecklistJson(checklistJson);
-                    else toSave.setChecklistJson(existingChecklistJson);
-                    toSave.setContent(existingContent);
-                }
-                toSave.setType(noteType);
+                toSave.setContent(finalContent);
+                if (checklistJson != null) toSave.setChecklistJson(checklistJson);
+                else toSave.setChecklistJson(existingChecklistJson);
+
+                boolean hasCl = (checklistJson != null && !checklistJson.equals("[]") && !checklistJson.trim().isEmpty());
+                toSave.setType(hasCl ? Note.TYPE_CHECKLIST : Note.TYPE_TEXT);
                 toSave.setColorIndex(colorIndex);
                 toSave.setCategoryId(categoryId);
                 toSave.setPinned(pinned);
@@ -1068,8 +1042,8 @@ public class EditNoteActivity extends AppCompatActivity {
                     mainHandler.post(() -> {
                         if (note != null && note.getId() == toSave.getId()) {
                             note.setTitle(finalTitle);
-                            if (noteType == Note.TYPE_TEXT) note.setContent(finalContent);
-                            else if (checklistJson != null) note.setChecklistJson(checklistJson);
+                            note.setContent(finalContent);
+                            if (checklistJson != null) note.setChecklistJson(checklistJson);
                         }
                     });
                 }
@@ -1614,7 +1588,7 @@ public class EditNoteActivity extends AppCompatActivity {
         }
         if (checklistAdapter != null) checklistAdapter.setReadOnly(enabled);
         if (attachmentsAdapter != null) attachmentsAdapter.setReadOnly(enabled);
-        if (btnAddItem != null) btnAddItem.setVisibility(enabled ? View.GONE : (note.getType() == Note.TYPE_CHECKLIST ? View.VISIBLE : View.GONE));
+        if (btnAddItem != null) btnAddItem.setVisibility(enabled ? View.GONE : (rvChecklist != null && rvChecklist.getVisibility() == View.VISIBLE ? View.VISIBLE : View.GONE));
 
         setEditorActionEnabled(btnPin, !enabled);
         setEditorActionEnabled(btnFav, !enabled);
@@ -1646,7 +1620,7 @@ public class EditNoteActivity extends AppCompatActivity {
             focusPreferredEditorField();
             showKeyboardForCurrentEditor();
         }
-        setTextTapToFocusEnabled(!enabled && note.getType() == Note.TYPE_TEXT);
+        setTextTapToFocusEnabled(!enabled);
         updateUndoButtons();
         updatePinFav();
         updateReadModeUi();
@@ -1738,7 +1712,12 @@ public class EditNoteActivity extends AppCompatActivity {
 
     private void focusPreferredEditorField() {
         if (readMode) return;
-        if (note != null && note.getType() == Note.TYPE_TEXT && etContent != null) {
+        if (etTitle != null && (etTitle.getText() == null || etTitle.getText().toString().isEmpty()) && isNew) {
+            etTitle.setCursorVisible(true);
+            etTitle.requestFocus();
+            return;
+        }
+        if (etContent != null) {
             etContent.setCursorVisible(true);
             etContent.requestFocus();
             etContent.post(() -> {
@@ -1855,26 +1834,18 @@ public class EditNoteActivity extends AppCompatActivity {
         }
     }
 
-    private void showTextMode() {
-        etContent.setVisibility(View.VISIBLE);
-        rvChecklist.setVisibility(View.GONE);
-        btnAddItem.setVisibility(View.GONE);
-        note.setType(Note.TYPE_TEXT);
-        setTextTapToFocusEnabled(!readMode);
-    }
-
-    private void showChecklistMode() {
-        etContent.setVisibility(View.GONE);
-        rvChecklist.setVisibility(View.VISIBLE);
-        btnAddItem.setVisibility(View.VISIBLE);
-        setTextTapToFocusEnabled(false);
+    private void setupChecklist() {
         List<ChecklistItem> items = note.getChecklistItems();
-        if (items.isEmpty()) items.add(new ChecklistItem("", false));
-        checklistAdapter = new ChecklistEditorAdapter(items, () -> { dirty = true; });
+        boolean hasItems = items != null && !items.isEmpty();
+
+        checklistAdapter = new ChecklistEditorAdapter(items, () -> {
+            dirty = true;
+            scheduleAutosaveDebounced();
+        });
         rvChecklist.setLayoutManager(new LinearLayoutManager(this));
         rvChecklist.setItemAnimator(null);
         rvChecklist.setAdapter(checklistAdapter);
-        // Drag&Drop: long-press отключён, перетаскивание стартует через handle
+
         ItemTouchHelper checklistTouchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(
                 ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0) {
             @Override
@@ -1891,16 +1862,18 @@ public class EditNoteActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onSwiped(@NonNull RecyclerView.ViewHolder vh, int direction) { /* not used */ }
+            public void onSwiped(@NonNull RecyclerView.ViewHolder vh, int direction) { }
         });
         checklistTouchHelper.attachToRecyclerView(rvChecklist);
         checklistAdapter.attachItemTouchHelper(checklistTouchHelper);
-        rvChecklist.post(() -> {
-            rvChecklist.requestLayout();
-            View scrollContent = findViewById(R.id.scroll_content);
-            if (scrollContent != null) scrollContent.requestLayout();
-        });
-        note.setType(Note.TYPE_CHECKLIST);
+
+        if (hasItems) {
+            rvChecklist.setVisibility(View.VISIBLE);
+            btnAddItem.setVisibility(readMode ? View.GONE : View.VISIBLE);
+        } else {
+            rvChecklist.setVisibility(View.GONE);
+            btnAddItem.setVisibility(View.GONE);
+        }
     }
 
     private void setTextTapToFocusEnabled(boolean enabled) {
@@ -1922,41 +1895,68 @@ public class EditNoteActivity extends AppCompatActivity {
 
     private void toggleChecklistMode() {
         if (!ensureEditableMode(null)) return;
-        if (note.getType() == Note.TYPE_TEXT) {
-            String content = etContent.getText().toString();
-            List<ChecklistItem> items = new ArrayList<>();
-            if (!content.trim().isEmpty()) {
-                for (String line : content.split("\n")) {
-                    String t = line.trim();
-                    if (!t.isEmpty()) items.add(new ChecklistItem(t, false));
+        boolean isCurrentlyVisible = (rvChecklist != null && rvChecklist.getVisibility() == View.VISIBLE && checklistAdapter != null && !checklistAdapter.getItems().isEmpty());
+
+        if (isCurrentlyVisible) {
+            List<ChecklistItem> items = checklistAdapter.getItems();
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < items.size(); i++) {
+                String t = items.get(i).text;
+                if (t != null && !t.trim().isEmpty()) {
+                    sb.append(t.trim()).append('\n');
                 }
             }
-            note.setChecklistItems(items);
-            showChecklistMode();
-        } else {
-            StringBuilder sb = new StringBuilder();
-            List<ChecklistItem> items = checklistAdapter.getItems();
-            for (int i = 0; i < items.size(); i++) {
-                sb.append(items.get(i).text);
-                if (i < items.size() - 1) sb.append('\n');
+            String clText = sb.toString().trim();
+            if (!clText.isEmpty()) {
+                String existing = etContent.getText() != null ? etContent.getText().toString() : "";
+                if (existing.trim().isEmpty()) {
+                    etContent.setText(clText);
+                } else {
+                    etContent.setText(clText + "\n\n" + existing);
+                }
             }
-            note.setContent(sb.toString());
-            etContent.setText(sb.toString());
-            showTextMode();
+            items.clear();
+            checklistAdapter.notifyDataSetChanged();
+            rvChecklist.setVisibility(View.GONE);
+            btnAddItem.setVisibility(View.GONE);
+            note.setChecklistJson("[]");
+            note.setType(Note.TYPE_TEXT);
+            dirty = true;
+            scheduleAutosaveDebounced();
+        } else {
+            rvChecklist.setVisibility(View.VISIBLE);
+            btnAddItem.setVisibility(readMode ? View.GONE : View.VISIBLE);
+            if (checklistAdapter != null) {
+                if (checklistAdapter.getItems().isEmpty()) {
+                    checklistAdapter.addNew();
+                }
+            }
+            note.setType(Note.TYPE_CHECKLIST);
+            dirty = true;
+            scheduleAutosaveDebounced();
+            if (scrollContent != null && rvChecklist != null) {
+                scrollContent.post(() -> {
+                    try { scrollContent.smoothScrollTo(0, rvChecklist.getTop()); } catch (Exception ignored) {}
+                });
+            }
         }
-        dirty = true;
     }
 
     private void populateNoteFromUi() {
-        // Capture UI data safely; may be called from background thread, so use try
         try {
             if (etTitle != null && etTitle.getText() != null) note.setTitle(etTitle.getText().toString());
         } catch (Exception ignored) {}
         try {
-            if (note.getType() == Note.TYPE_TEXT && etContent != null && etContent.getText() != null) {
+            if (etContent != null && etContent.getText() != null) {
                 note.setContent(etContent.getText().toString());
-            } else if (checklistAdapter != null) {
-                note.setChecklistItems(checklistAdapter.getItems());
+            }
+        } catch (Exception ignored) {}
+        try {
+            if (checklistAdapter != null) {
+                List<ChecklistItem> items = checklistAdapter.getItems();
+                note.setChecklistItems(items);
+                boolean hasCl = items != null && !items.isEmpty();
+                note.setType(hasCl ? Note.TYPE_CHECKLIST : Note.TYPE_TEXT);
             }
         } catch (Exception ignored) {}
         note.setTextSize(note.getTextSize());
@@ -1964,11 +1964,12 @@ public class EditNoteActivity extends AppCompatActivity {
 
     private void populateNoteFromUiInto(Note target, String title, String content, String checklistJson) {
         target.setTitle(title != null ? title : "");
-        if (target.getType() == Note.TYPE_TEXT) {
-            target.setContent(content != null ? content : "");
-        } else if (checklistJson != null) {
+        target.setContent(content != null ? content : "");
+        if (checklistJson != null) {
             target.setChecklistJson(checklistJson);
         }
+        boolean hasCl = (checklistJson != null && !checklistJson.equals("[]") && !checklistJson.trim().isEmpty());
+        target.setType(hasCl ? Note.TYPE_CHECKLIST : Note.TYPE_TEXT);
         target.setTextSize(target.getTextSize());
     }
 
@@ -1977,13 +1978,11 @@ public class EditNoteActivity extends AppCompatActivity {
         // First check simple flags
         if (dirty || !pendingDeleteAttachmentFiles.isEmpty()) return true;
         if (startedAsNew && note.getId() == 0) {
-            // For new note, check if title/content non-empty without full populate
             try {
                 String t = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : "";
                 String c = etContent != null && etContent.getText() != null ? etContent.getText().toString() : "";
                 if (!t.trim().isEmpty() || !c.trim().isEmpty()) return true;
-                if (note.getType() == Note.TYPE_CHECKLIST && checklistAdapter != null && !checklistAdapter.getItems().isEmpty()) {
-                    // Check if any item has text
+                if (checklistAdapter != null && !checklistAdapter.getItems().isEmpty()) {
                     for (ChecklistItem it : checklistAdapter.getItems()) {
                         if (it != null && it.text != null && !it.text.trim().isEmpty()) return true;
                     }
@@ -1993,22 +1992,12 @@ public class EditNoteActivity extends AppCompatActivity {
         }
         try {
             String curTitle = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : note.getTitle();
-            String curContent;
-            String curChecklist;
-            if (note.getType() == Note.TYPE_TEXT) {
-                curContent = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
-                curChecklist = initialChecklistJson;
-            } else {
-                curContent = initialContent;
-                if (checklistAdapter != null) {
-                    curChecklist = ChecklistItem.toJson(checklistAdapter.getItems());
-                } else {
-                    curChecklist = note.getChecklistJson();
-                }
-            }
+            String curContent = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
+            String curChecklist = checklistAdapter != null ? ChecklistItem.toJson(checklistAdapter.getItems()) : note.getChecklistJson();
+
             if (!initialTitle.equals(curTitle)) return true;
-            if (note.getType() == Note.TYPE_TEXT && !initialContent.equals(curContent)) return true;
-            if (note.getType() == Note.TYPE_CHECKLIST && !initialChecklistJson.equals(curChecklist)) return true;
+            if (!initialContent.equals(curContent)) return true;
+            if (!initialChecklistJson.equals(curChecklist)) return true;
             if (!initialAttachmentsJson.equals(note.getAttachmentsJson())) return true;
             if (initialColor != note.getColorIndex()) return true;
             if (initialCategoryId != note.getCategoryId()) return true;
@@ -2026,7 +2015,6 @@ public class EditNoteActivity extends AppCompatActivity {
 
     // Legacy sync saveNote now delegates to async to keep UI free
     private boolean saveNote(boolean silent) {
-        // Capture current UI state
         String title;
         String content;
         String checklistJson = null;
@@ -2036,25 +2024,25 @@ public class EditNoteActivity extends AppCompatActivity {
             title = note.getTitle();
         }
         try {
-            if (note.getType() == Note.TYPE_TEXT) {
-                content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
-            } else {
-                content = note.getContent();
-                if (checklistAdapter != null) {
-                    checklistJson = ChecklistItem.toJson(checklistAdapter.getItems());
-                }
-            }
+            content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
         } catch (Exception e) {
             content = note.getContent();
         }
+        try {
+            if (checklistAdapter != null) {
+                checklistJson = ChecklistItem.toJson(checklistAdapter.getItems());
+            } else {
+                checklistJson = note.getChecklistJson();
+            }
+        } catch (Exception e) {
+            checklistJson = note.getChecklistJson();
+        }
 
-        // Empty check
         boolean isEmpty = (title == null || title.trim().isEmpty())
-                && (note.getType() == Note.TYPE_TEXT ? (content == null || content.trim().isEmpty()) : true)
-                && (note.getType() == Note.TYPE_CHECKLIST ? (checklistJson == null || checklistJson.equals("[]") || checklistJson.trim().isEmpty()) : true)
+                && (content == null || content.trim().isEmpty())
+                && (checklistJson == null || checklistJson.equals("[]") || checklistJson.trim().isEmpty())
                 && note.getAttachments().isEmpty();
 
-        // For empty new note, just clear pending deletes
         if (isEmpty && isNew) {
             pendingDeleteAttachmentFiles.clear();
             if (!silent && root != null) Snackbar.make(root, R.string.msg_empty_note, Snackbar.LENGTH_SHORT).show();
@@ -2066,16 +2054,15 @@ public class EditNoteActivity extends AppCompatActivity {
         final String finalChecklistJson = checklistJson;
         final boolean finalSilent = silent;
 
-        // Offload DB to diskIO, but update UI immediately for responsiveness
         AppExecutors.getInstance().diskIO().execute(() -> {
             try {
-                // Update in-memory note
                 note.setTitle(finalTitle);
-                if (note.getType() == Note.TYPE_TEXT) {
-                    note.setContent(finalContent);
-                } else if (finalChecklistJson != null) {
+                note.setContent(finalContent);
+                if (finalChecklistJson != null) {
                     note.setChecklistJson(finalChecklistJson);
                 }
+                boolean hasCl = (finalChecklistJson != null && !finalChecklistJson.equals("[]") && !finalChecklistJson.trim().isEmpty());
+                note.setType(hasCl ? Note.TYPE_CHECKLIST : Note.TYPE_TEXT);
 
                 if (note.isEmpty()) {
                     if (!isNew) {
@@ -2145,26 +2132,24 @@ public class EditNoteActivity extends AppCompatActivity {
     }
 
     private void forceSaveNew() {
-        // Capture UI quickly
         String title;
         String content;
+        String clJson = null;
         try { title = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : ""; } catch (Exception e) { title = ""; }
         try { content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : ""; } catch (Exception e) { content = ""; }
+        try { if (checklistAdapter != null) clJson = ChecklistItem.toJson(checklistAdapter.getItems()); } catch (Exception ignored) {}
         final String ft = title;
         final String fc = content;
-        // For attachment flow, we need note ID synchronously? We will do blocking diskIO but on background? However startCopy expects ID immediately.
-        // So we do sync in diskIO but wait? To avoid UI thread DB, we will run on diskIO and post result? But original code needed ID before starting service.
-        // We implement synchronous save on diskIO thread but called from UI thread - we will do it via repo directly only if not large? For simplicity, keep old behavior but offload to allow UI to continue?
-        // To keep compatibility, we do immediate save on current thread only if small, otherwise we try to save synchronously in background and busy wait? Better to do sync save but in diskIO with latch.
-        // For minimal change, we keep sync save for this path because it's needed for attachment copy service to have ID.
-        // However we can still avoid UI lag by using AppExecutors but blocking with future for short time.
-        // We'll attempt async with latch.
+        final String fcl = clJson;
         final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
         final long[] newIdHolder = new long[1];
         AppExecutors.getInstance().diskIO().execute(() -> {
             try {
                 note.setTitle(ft);
-                if (note.getType() == Note.TYPE_TEXT) note.setContent(fc);
+                note.setContent(fc);
+                if (fcl != null) note.setChecklistJson(fcl);
+                boolean hasCl = (fcl != null && !fcl.equals("[]") && !fcl.isEmpty());
+                note.setType(hasCl ? Note.TYPE_CHECKLIST : Note.TYPE_TEXT);
                 if (isNew) {
                     long nid = repo.addNote(note);
                     newIdHolder[0] = nid;
@@ -2226,14 +2211,11 @@ public class EditNoteActivity extends AppCompatActivity {
         String content;
         String checklistJson = null;
         try { title = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : note.getTitle(); } catch (Exception e) { title = note.getTitle(); }
+        try { content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent(); } catch (Exception e) { content = note.getContent(); }
         try {
-            if (note.getType() == Note.TYPE_TEXT) {
-                content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
-            } else {
-                content = note.getContent();
-                if (checklistAdapter != null) checklistJson = ChecklistItem.toJson(checklistAdapter.getItems());
-            }
-        } catch (Exception e) { content = note.getContent(); }
+            if (checklistAdapter != null) checklistJson = ChecklistItem.toJson(checklistAdapter.getItems());
+            else checklistJson = note.getChecklistJson();
+        } catch (Exception e) { checklistJson = note.getChecklistJson(); }
 
         final String ft = title;
         final String fc = content;
@@ -2243,8 +2225,10 @@ public class EditNoteActivity extends AppCompatActivity {
         AppExecutors.getInstance().diskIO().execute(() -> {
             try {
                 note.setTitle(ft);
-                if (note.getType() == Note.TYPE_TEXT) note.setContent(fc);
-                else if (fcl != null) note.setChecklistJson(fcl);
+                note.setContent(fc);
+                if (fcl != null) note.setChecklistJson(fcl);
+                boolean hasCl = (fcl != null && !fcl.equals("[]") && !fcl.isEmpty());
+                note.setType(hasCl ? Note.TYPE_CHECKLIST : Note.TYPE_TEXT);
 
                 if (!note.isEmpty()) {
                     if (isNew) {
@@ -2427,8 +2411,8 @@ public class EditNoteActivity extends AppCompatActivity {
             aCopy.setVisibility(View.GONE);
         }
 
-        aConvert.setText(note.getType() == Note.TYPE_TEXT
-                ? R.string.convert_to_checklist : R.string.convert_to_text);
+        boolean clVisible = (rvChecklist != null && rvChecklist.getVisibility() == View.VISIBLE && checklistAdapter != null && !checklistAdapter.getItems().isEmpty());
+        aConvert.setText(clVisible ? R.string.convert_to_text : R.string.convert_to_checklist);
         aFavorite.setText(note.isFavorite() ? getString(R.string.sheet_remove_favorite) : getString(R.string.sheet_add_favorite));
         aReadAloud.setText(isSpeakingAloud ? getString(R.string.edit_note_stop_reading) : getString(R.string.edit_note_read_aloud));
 
@@ -2457,22 +2441,32 @@ public class EditNoteActivity extends AppCompatActivity {
             HapticUtils.light(view); sheet.dismiss();
             Intent send = new Intent(Intent.ACTION_SEND);
             send.setType("text/plain");
-            String body = etTitle.getText() + "\n\n" +
-                    (note.getType() == Note.TYPE_TEXT ? etContent.getText() : note.getPreview());
-            send.putExtra(Intent.EXTRA_TEXT, body);
+            StringBuilder sb = new StringBuilder();
+            if (etTitle != null && etTitle.getText() != null && !etTitle.getText().toString().trim().isEmpty()) {
+                sb.append(etTitle.getText().toString().trim()).append("\n\n");
+            }
+            if (checklistAdapter != null && rvChecklist != null && rvChecklist.getVisibility() == View.VISIBLE) {
+                List<ChecklistItem> items = checklistAdapter.getItems();
+                if (!items.isEmpty()) {
+                    for (ChecklistItem it : items) {
+                        sb.append(it.checked ? "[x] " : "[ ] ").append(it.text).append('\n');
+                    }
+                    sb.append('\n');
+                }
+            }
+            if (etContent != null && etContent.getText() != null && !etContent.getText().toString().trim().isEmpty()) {
+                sb.append(etContent.getText().toString().trim());
+            }
+            send.putExtra(Intent.EXTRA_TEXT, sb.toString().trim());
             startActivity(Intent.createChooser(send, getString(R.string.share)));
         });
 
         aDuplicate.setOnClickListener(view -> {
             HapticUtils.light(view); sheet.dismiss();
-            // Capture UI data on UI thread
             String title, content, checklistJson;
             try { title = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : note.getTitle(); } catch (Exception e) { title = note.getTitle(); }
-            try {
-                if (note.getType() == Note.TYPE_TEXT) content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
-                else content = note.getContent();
-                checklistJson = checklistAdapter != null ? ChecklistItem.toJson(checklistAdapter.getItems()) : note.getChecklistJson();
-            } catch (Exception e) { content = note.getContent(); checklistJson = note.getChecklistJson(); }
+            try { content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent(); } catch (Exception e) { content = note.getContent(); }
+            try { checklistJson = checklistAdapter != null ? ChecklistItem.toJson(checklistAdapter.getItems()) : note.getChecklistJson(); } catch (Exception e) { checklistJson = note.getChecklistJson(); }
             final String ft = title, fc = content, fcl = checklistJson;
             AppExecutors.getInstance().diskIO().execute(() -> {
                 try {
@@ -2481,7 +2475,8 @@ public class EditNoteActivity extends AppCompatActivity {
                     dup.setContent(fc);
                     dup.setChecklistJson(fcl);
                     dup.setAttachmentsJson("[]");
-                    dup.setType(note.getType());
+                    boolean hasCl = (fcl != null && !fcl.equals("[]") && !fcl.isEmpty());
+                    dup.setType(hasCl ? Note.TYPE_CHECKLIST : Note.TYPE_TEXT);
                     dup.setColorIndex(note.getColorIndex());
                     dup.setCategoryId(note.getCategoryId());
                     dup.setTextSize(note.getTextSize());
@@ -2518,17 +2513,16 @@ public class EditNoteActivity extends AppCompatActivity {
             // Save then archive off UI thread
             String title, content, checklistJson;
             try { title = etTitle != null && etTitle.getText() != null ? etTitle.getText().toString() : note.getTitle(); } catch (Exception e) { title = note.getTitle(); }
-            try {
-                if (note.getType() == Note.TYPE_TEXT) content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent();
-                else content = note.getContent();
-                checklistJson = checklistAdapter != null ? ChecklistItem.toJson(checklistAdapter.getItems()) : note.getChecklistJson();
-            } catch (Exception e) { content = note.getContent(); checklistJson = note.getChecklistJson(); }
+            try { content = etContent != null && etContent.getText() != null ? etContent.getText().toString() : note.getContent(); } catch (Exception e) { content = note.getContent(); }
+            try { checklistJson = checklistAdapter != null ? ChecklistItem.toJson(checklistAdapter.getItems()) : note.getChecklistJson(); } catch (Exception e) { checklistJson = note.getChecklistJson(); }
             final String ft = title, fc = content, fcl = checklistJson;
             AppExecutors.getInstance().diskIO().execute(() -> {
                 try {
                     note.setTitle(ft);
-                    if (note.getType() == Note.TYPE_TEXT) note.setContent(fc);
-                    else if (fcl != null) note.setChecklistJson(fcl);
+                    note.setContent(fc);
+                    if (fcl != null) note.setChecklistJson(fcl);
+                    boolean hasCl = (fcl != null && !fcl.equals("[]") && !fcl.isEmpty());
+                    note.setType(hasCl ? Note.TYPE_CHECKLIST : Note.TYPE_TEXT);
                     if (!note.isEmpty()) repo.updateNote(note);
                     repo.archiveNote(note.getId());
                 } catch (Exception e) {
@@ -2562,18 +2556,23 @@ public class EditNoteActivity extends AppCompatActivity {
 
         aCopy.setOnClickListener(view -> {
             HapticUtils.light(view); sheet.dismiss();
-            String title = etTitle.getText() == null ? "" : etTitle.getText().toString().trim();
-            String body = note.getType() == Note.TYPE_TEXT
-                    ? (etContent.getText() == null ? "" : etContent.getText().toString().trim())
-                    : note.getPreview().trim();
-            String textToCopy;
-            if (!title.isEmpty() && !body.isEmpty()) {
-                textToCopy = title + "\n\n" + body;
-            } else if (!title.isEmpty()) {
-                textToCopy = title;
-            } else {
-                textToCopy = body;
+            StringBuilder sb = new StringBuilder();
+            if (etTitle != null && etTitle.getText() != null && !etTitle.getText().toString().trim().isEmpty()) {
+                sb.append(etTitle.getText().toString().trim()).append("\n\n");
             }
+            if (checklistAdapter != null && rvChecklist != null && rvChecklist.getVisibility() == View.VISIBLE) {
+                List<ChecklistItem> items = checklistAdapter.getItems();
+                if (!items.isEmpty()) {
+                    for (ChecklistItem it : items) {
+                        sb.append(it.checked ? "[x] " : "[ ] ").append(it.text).append('\n');
+                    }
+                    sb.append('\n');
+                }
+            }
+            if (etContent != null && etContent.getText() != null && !etContent.getText().toString().trim().isEmpty()) {
+                sb.append(etContent.getText().toString().trim());
+            }
+            String textToCopy = sb.toString().trim();
             ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             if (clipboard != null) {
                 clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), textToCopy));
@@ -2684,8 +2683,8 @@ public class EditNoteActivity extends AppCompatActivity {
         populateNoteFromUi();
         List<Attachment> attachments = note.getAttachments();
         int attachmentCount = attachments.size();
-        int checklistCount = note.getType() == Note.TYPE_CHECKLIST ? note.getTotalChecklistItems() : 0;
-        int checklistDone = note.getType() == Note.TYPE_CHECKLIST ? note.getCheckedCount() : 0;
+        int checklistCount = note.getTotalChecklistItems();
+        int checklistDone = note.getCheckedCount();
         int imageCount = 0;
         int videoCount = 0;
         int audioCount = 0;
@@ -2740,7 +2739,7 @@ public class EditNoteActivity extends AppCompatActivity {
                 msg.append(getString(R.string.note_info_attachment_files, fileCount));
             }
         }
-        if (note.getType() == Note.TYPE_CHECKLIST) {
+        if (checklistCount > 0) {
             msg.append("\n");
             msg.append(getString(R.string.note_info_checklist, checklistCount));
             msg.append("\n");
@@ -3511,10 +3510,6 @@ public class EditNoteActivity extends AppCompatActivity {
 
     private void toggleFindMode() {
         if (!ensureEditableMode(null)) return;
-        if (note.getType() != Note.TYPE_TEXT) {
-            Snackbar.make(root, getString(R.string.edit_note_text_mode_search_only), Snackbar.LENGTH_SHORT).show();
-            return;
-        }
         if (isFindMode) {
             exitFindMode();
             return;
@@ -3778,18 +3773,17 @@ public class EditNoteActivity extends AppCompatActivity {
         if (!etTitle.getText().toString().trim().isEmpty()) {
             text.append(etTitle.getText().toString().trim()).append(". ");
         }
-        if (note.getType() == Note.TYPE_TEXT) {
-            text.append(etContent.getText().toString());
-        } else {
-            List<ChecklistItem> items = checklistAdapter != null
-                    ? checklistAdapter.getItems()
-                    : note.getChecklistItems();
+        if (checklistAdapter != null && rvChecklist != null && rvChecklist.getVisibility() == View.VISIBLE) {
+            List<ChecklistItem> items = checklistAdapter.getItems();
             for (ChecklistItem item : items) {
                 if (item.text == null || item.text.trim().isEmpty()) continue;
                 text.append(item.checked
                         ? getString(R.string.edit_note_done_prefix, item.text)
                         : getString(R.string.edit_note_point_prefix, item.text)).append(". ");
             }
+        }
+        if (etContent != null && etContent.getText() != null && !etContent.getText().toString().trim().isEmpty()) {
+            text.append(etContent.getText().toString().trim());
         }
         String toSpeak = text.toString().trim();
         if (toSpeak.isEmpty()) {

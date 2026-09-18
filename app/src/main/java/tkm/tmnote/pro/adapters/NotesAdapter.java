@@ -508,27 +508,34 @@ public class NotesAdapter extends RecyclerView.Adapter<NotesAdapter.VH> {
                 h.title.setText(n.getTitle());
             }
 
-            if (n.getType() == Note.TYPE_CHECKLIST) {
-                h.preview.setVisibility(View.GONE);
+            List<ChecklistItem> clItems = n.getChecklistItems();
+            boolean hasChecklist = clItems != null && !clItems.isEmpty();
+            String content = buildTextPreview(n.getContent());
+            boolean hasContent = !content.isEmpty();
+
+            if (hasChecklist) {
                 h.checklistContainer.setVisibility(View.VISIBLE);
-                renderChecklistPreview(h.checklistContainer, n.getChecklistItems());
-                int total = n.getTotalChecklistItems();
-                int done = n.getCheckedCount();
+                renderChecklistPreview(h.checklistContainer, clItems);
+                int total = clItems.size();
+                int done = 0;
+                for (ChecklistItem it : clItems) if (it.checked) done++;
                 if (total > 0) {
                     h.progress.setVisibility(View.VISIBLE);
                     h.progress.setText(done + "/" + total);
-                } else h.progress.setVisibility(View.GONE);
+                } else {
+                    h.progress.setVisibility(View.GONE);
+                }
             } else {
                 h.checklistContainer.setVisibility(View.GONE);
                 h.progress.setVisibility(View.GONE);
-                String content = buildTextPreview(n.getContent());
-                if (content.isEmpty()) {
-                    h.preview.setVisibility(View.GONE);
-                } else {
-                    h.preview.setVisibility(View.VISIBLE);
-                    h.preview.setText(content);
-                    h.preview.setMaxLines(getPreviewMaxLinesCached());
-                }
+            }
+
+            if (hasContent) {
+                h.preview.setVisibility(View.VISIBLE);
+                h.preview.setText(content);
+                h.preview.setMaxLines(hasChecklist ? (viewMode == PrefsManager.VIEW_GRID ? 3 : 5) : getPreviewMaxLinesCached());
+            } else {
+                h.preview.setVisibility(View.GONE);
             }
         }
 
