@@ -1588,7 +1588,7 @@ public class EditNoteActivity extends AppCompatActivity {
         }
         if (checklistAdapter != null) checklistAdapter.setReadOnly(enabled);
         if (attachmentsAdapter != null) attachmentsAdapter.setReadOnly(enabled);
-        if (btnAddItem != null) btnAddItem.setVisibility(enabled ? View.GONE : (rvChecklist != null && rvChecklist.getVisibility() == View.VISIBLE ? View.VISIBLE : View.GONE));
+        updateChecklistVisibility();
 
         setEditorActionEnabled(btnPin, !enabled);
         setEditorActionEnabled(btnFav, !enabled);
@@ -1834,13 +1834,28 @@ public class EditNoteActivity extends AppCompatActivity {
         }
     }
 
+    private void updateChecklistVisibility() {
+        if (checklistAdapter == null) return;
+        boolean hasItems = !checklistAdapter.getItems().isEmpty();
+        if (hasItems) {
+            if (rvChecklist != null) rvChecklist.setVisibility(View.VISIBLE);
+            if (btnAddItem != null) btnAddItem.setVisibility(readMode ? View.GONE : View.VISIBLE);
+            note.setType(Note.TYPE_CHECKLIST);
+        } else {
+            if (rvChecklist != null) rvChecklist.setVisibility(View.GONE);
+            if (btnAddItem != null) btnAddItem.setVisibility(View.GONE);
+            note.setChecklistJson("[]");
+            note.setType(Note.TYPE_TEXT);
+        }
+    }
+
     private void setupChecklist() {
         List<ChecklistItem> items = note.getChecklistItems();
-        boolean hasItems = items != null && !items.isEmpty();
 
         checklistAdapter = new ChecklistEditorAdapter(items, () -> {
             dirty = true;
             scheduleAutosaveDebounced();
+            updateChecklistVisibility();
         });
         rvChecklist.setLayoutManager(new LinearLayoutManager(this));
         rvChecklist.setItemAnimator(null);
@@ -1867,13 +1882,7 @@ public class EditNoteActivity extends AppCompatActivity {
         checklistTouchHelper.attachToRecyclerView(rvChecklist);
         checklistAdapter.attachItemTouchHelper(checklistTouchHelper);
 
-        if (hasItems) {
-            rvChecklist.setVisibility(View.VISIBLE);
-            btnAddItem.setVisibility(readMode ? View.GONE : View.VISIBLE);
-        } else {
-            rvChecklist.setVisibility(View.GONE);
-            btnAddItem.setVisibility(View.GONE);
-        }
+        updateChecklistVisibility();
     }
 
     private void setTextTapToFocusEnabled(boolean enabled) {
@@ -1917,21 +1926,17 @@ public class EditNoteActivity extends AppCompatActivity {
             }
             items.clear();
             checklistAdapter.notifyDataSetChanged();
-            rvChecklist.setVisibility(View.GONE);
-            btnAddItem.setVisibility(View.GONE);
-            note.setChecklistJson("[]");
-            note.setType(Note.TYPE_TEXT);
+            updateChecklistVisibility();
             dirty = true;
             scheduleAutosaveDebounced();
         } else {
-            rvChecklist.setVisibility(View.VISIBLE);
-            btnAddItem.setVisibility(readMode ? View.GONE : View.VISIBLE);
             if (checklistAdapter != null) {
                 if (checklistAdapter.getItems().isEmpty()) {
                     checklistAdapter.addNew();
+                } else {
+                    updateChecklistVisibility();
                 }
             }
-            note.setType(Note.TYPE_CHECKLIST);
             dirty = true;
             scheduleAutosaveDebounced();
             if (scrollContent != null && rvChecklist != null) {
